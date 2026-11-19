@@ -42,6 +42,7 @@ PY
   paso "trampas de vistas de la 19" $VENV/python "$RAIZ/tools/comprobar_vistas19.py" "$MOD"
 
   paso "campos de las vistas y ACL" $VENV/python "$RAIZ/tools/comprobar_campos.py" "$MOD"
+  paso "selectores traducibles" $VENV/python "$RAIZ/tools/comprobar_selectores.py" "$MOD"
   paso "anclajes de vistas heredadas" $VENV/python "$RAIZ/tools/comprobar_herencias.py" "$MOD"
   paso "xmlid de otros modulos" $VENV/python "$RAIZ/tools/comprobar_xmlids.py" "$MOD"
   paso "dominios sobre calculados" $VENV/python "$RAIZ/tools/comprobar_dominios.py" "$MOD"
