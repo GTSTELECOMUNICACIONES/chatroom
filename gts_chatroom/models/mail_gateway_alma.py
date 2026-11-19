@@ -25,6 +25,8 @@ from odoo.tools import html2plaintext, plaintext2html
 
 from odoo.addons.base.models.ir_mail_server import MailDeliveryException
 
+from .mail_message import ORIGENES
+
 _logger = logging.getLogger(__name__)
 
 # Margen para la hora de la firma. El mismo que se acordo para la pantalla.
@@ -133,9 +135,11 @@ class MailGatewayAlma(models.AbstractModel):
 
         {tipo, emitido_en, numero,
          conversacion: {id, contacto: {telefono, nombre}},
-         mensaje: {id, de: cliente|ia|operador, texto, adjuntos: [...]},
+         mensaje: {id, de: contacto|ia|operador|movil|sistema, texto,
+                   adjuntos: [{nombre, mime, url o null}]},
          acuse: {mensaje_id, estado, alma_motivo, detalle},
-         estado: {relevo, asignado_a}}
+         estado: {relevo: ia|humano|resuelta, asignado_a, espera,
+                  motivo_relevo}}
         """
         conversacion = update.get("conversacion") or {}
         contacto = conversacion.get("contacto") or {}
@@ -179,13 +183,22 @@ class MailGatewayAlma(models.AbstractModel):
             body = plaintext2html(mensaje["texto"])
         adjuntos = []
         for adjunto in mensaje.get("adjuntos") or []:
+            # HOY EL PORTAL NO GUARDA LOS FICHEROS y la url llega vacia; Meta
+            # los borra a los 7 dias. Se dice que existe y que no lo tenemos,
+            # que es honesto, en vez de un enlace que dara 404.
+            if not adjunto.get("url"):
+                body += Markup("<p><i>%s</i></p>") % self.env._(
+                    "Se recibió %(que)s, pero el fichero no está disponible.",
+                    que=self._alma_que_es(adjunto),
+                )
+                continue
             descargado = self._alma_descargar(gateway, adjunto)
             if descargado:
                 adjuntos.append(descargado)
             else:
                 body += Markup("<p><i>%s</i></p>") % self.env._(
-                    "No se pudo descargar el adjunto %(nombre)s.",
-                    nombre=adjunto.get("nombre") or "",
+                    "No se pudo descargar %(que)s.",
+                    que=self._alma_que_es(adjunto),
                 )
         if not body and not adjuntos:
             return
@@ -206,19 +219,56 @@ class MailGatewayAlma(models.AbstractModel):
                 attachments=adjuntos,
             )
         )
-        nuevo.sudo().alma_mensaje_id = alma_id or False
+        nuevo.sudo().write(
+            {
+                "alma_mensaje_id": alma_id or False,
+                # Un origen nuevo del portal no puede tumbar la entrada: una
+                # Selection con un valor que no conoce da ValueError.
+                "alma_origen": (
+                    self._alma_origen(mensaje)
+                    if self._alma_origen(mensaje) in dict(ORIGENES)
+                    else False
+                ),
+            }
+        )
         canal.sudo().alma_ultimo_mensaje = evento["emitido_en"]
         self._post_process_message(nuevo, canal)
 
+    def _alma_origen(self, mensaje):
+        de = mensaje.get("de") or "contacto"
+        # «cliente» era el nombre de la version 0.1 del contrato.
+        return "contacto" if de == "cliente" else de
+
     def _alma_autor_del_mensaje(self, gateway, evento):
-        de = evento["mensaje"].get("de") or "cliente"
-        if de == "ia":
+        de = self._alma_origen(evento["mensaje"])
+        if de in ("ia", "sistema"):
             return self.env.ref("gts_chatroom.partner_alma_ia")
-        if de == "operador":
-            # El dueno contestando desde su movil: cuenta como persona, y en
-            # Odoo sale como la empresa, que es quien habla.
+        if de in ("operador", "movil"):
+            # Una persona del equipo, desde el ChatRoom del portal o desde su
+            # propio WhatsApp: en Odoo sale como la empresa, que es quien
+            # habla. Por donde contesto queda en `alma_origen`.
             return gateway.company_id.partner_id or self.env.company.partner_id
+        if de != "contacto":
+            _logger.warning("ChatRoom: origen desconocido %r, va como cliente", de)
         return self._get_author(gateway, evento) or self.env["res.partner"]
+
+    def _alma_que_es(self, adjunto):
+        mime = adjunto.get("mime") or ""
+        nombre = adjunto.get("nombre")
+        tipo = (
+            self.env._("una imagen")
+            if mime.startswith("image/")
+            else (
+                self.env._("un audio")
+                if mime.startswith("audio/")
+                else (
+                    self.env._("un vídeo")
+                    if mime.startswith("video/")
+                    else self.env._("un documento")
+                )
+            )
+        )
+        return f"{tipo} ({nombre})" if nombre else tipo
 
     def _get_author(self, gateway, update):
         """El contacto que escribe. BUSCAR ANTES DE CREAR: primero el enlace

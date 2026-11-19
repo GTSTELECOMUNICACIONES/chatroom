@@ -10,12 +10,14 @@
             <list
                 create="0"
                 delete="0"
-                decoration-danger="alma_relevo == 'esperando'"
-                decoration-muted="alma_relevo == 'resuelta'"
+                decoration-danger="alma_cola == 'esperando'"
+                decoration-warning="alma_cola == 'contestada'"
+                decoration-muted="alma_cola == 'resuelta'"
             >
                 <field name="name" string="Contacto" />
                 <field name="gateway_channel_token" string="Teléfono" />
-                <field name="alma_relevo" widget="badge" />
+                <field name="alma_cola" widget="badge" />
+                <field name="alma_motivo_relevo" optional="hide" />
                 <field name="alma_asignado_a" optional="show" />
                 <field name="alma_esperando_desde" optional="show" />
                 <field name="alma_ultimo_mensaje" />
@@ -40,25 +42,30 @@
                 <filter
                     name="esperando"
                     string="Esperando"
-                    domain="[('alma_relevo', '=', 'esperando')]"
+                    domain="[('alma_cola', '=', 'esperando')]"
                 />
                 <filter
                     name="asistiendo"
                     string="Asistiendo"
-                    domain="[('alma_relevo', '=', 'humano')]"
+                    domain="[('alma_cola', '=', 'asignada')]"
+                />
+                <filter
+                    name="contestada"
+                    string="Contestadas sin asignar"
+                    domain="[('alma_cola', '=', 'contestada')]"
                 />
                 <filter
                     name="ia"
                     string="Con la IA"
-                    domain="[('alma_relevo', '=', 'ia')]"
+                    domain="[('alma_cola', '=', 'ia')]"
                 />
                 <separator />
                 <filter
                     name="abiertas"
                     string="Abiertas"
-                    domain="[('alma_relevo', '!=', 'resuelta')]"
+                    domain="[('alma_cola', '!=', 'resuelta')]"
                 />
-                <filter name="por_relevo" string="Relevo" context="{'group_by': 'alma_relevo'}" />
+                <filter name="por_relevo" string="Relevo" context="{'group_by': 'alma_cola'}" />
             </search>
         </field>
     </record>
