@@ -1,0 +1,72 @@
+<?xml version="1.0" encoding="utf-8" ?>
+<odoo>
+    <record id="mail_gateway_form_view" model="ir.ui.view">
+        <field name="name">mail.gateway.form (gts_chatroom)</field>
+        <field name="model">mail.gateway</field>
+        <field name="inherit_id" ref="mail_gateway.mail_gateway_form_view" />
+        <field name="arch" type="xml">
+            <xpath expr="//header" position="inside">
+                <button
+                    type="object"
+                    name="action_alma_recuperar"
+                    string="Recuperar del portal"
+                    icon="fa-download"
+                    invisible="gateway_type != 'alma' or integrated_webhook_state != 'integrated'"
+                />
+                <button
+                    type="object"
+                    name="action_alma_regenerar_claves"
+                    string="Regenerar claves"
+                    icon="fa-key"
+                    invisible="gateway_type != 'alma'"
+                    confirm="El portal dejara de poder mandar mensajes hasta que se le copien la nueva URL de entrada y el nuevo secreto. ¿Seguir?"
+                />
+            </xpath>
+            <field name="webhook_user_id" position="after">
+                <field
+                    name="alma_url"
+                    placeholder="https://portal.ejemplo.com"
+                    invisible="gateway_type != 'alma'"
+                    required="gateway_type == 'alma'"
+                />
+                <field
+                    name="alma_numero"
+                    invisible="gateway_type != 'alma'"
+                    required="gateway_type == 'alma'"
+                />
+                <field
+                    name="alma_url_entrada"
+                    widget="CopyClipboardChar"
+                    invisible="gateway_type != 'alma'"
+                />
+                <field name="alma_ultimo_evento" invisible="gateway_type != 'alma'" />
+            </field>
+            <notebook position="inside">
+                <page
+                    name="alma"
+                    string="Portal de Alma"
+                    invisible="gateway_type != 'alma'"
+                >
+                    <div>
+                        <h2>Cómo se conecta</h2>
+                        <ol>
+                            <li><b>Token</b>: la clave que da el portal para esta cuenta. Odoo la manda en cada envío.</li>
+                            <li><b>URL del portal</b> y <b>Número de WhatsApp</b>: los da el portal. El número es el que identifica la cuenta.</li>
+                            <li>La <b>clave de webhook</b> y el <b>secreto</b> los genera Odoo al crear la pasarela. Copie en el portal la <b>URL de entrada</b> y el <b>secreto</b>.</li>
+                            <li>Pulse <b>Integrar webhook</b>. Desde ese momento Odoo acepta lo que mande el portal.</li>
+                        </ol>
+                        <p>Si el servidor estuvo caído, <b>Recuperar del portal</b> pide lo que se haya perdido. Lo repetido se descarta solo.</p>
+                    </div>
+                </page>
+            </notebook>
+        </field>
+    </record>
+
+    <record id="mail_gateway_alma_action" model="ir.actions.act_window">
+        <field name="name">Pasarelas</field>
+        <field name="res_model">mail.gateway</field>
+        <field name="view_mode">list,form</field>
+        <field name="domain">[('gateway_type', '=', 'alma')]</field>
+        <field name="context">{'default_gateway_type': 'alma'}</field>
+    </record>
+</odoo>

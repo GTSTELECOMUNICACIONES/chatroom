@@ -1,0 +1,30 @@
+<?xml version="1.0" encoding="utf-8" ?>
+<odoo>
+    <menuitem
+        id="menu_chatroom_root"
+        name="ChatRoom"
+        groups="mail_gateway.gateway_user"
+        sequence="45"
+    />
+    <menuitem
+        id="menu_chatroom_conversaciones"
+        name="Conversaciones"
+        parent="menu_chatroom_root"
+        action="discuss_channel_alma_action"
+        sequence="10"
+    />
+    <menuitem
+        id="menu_chatroom_config"
+        name="Configuración"
+        parent="menu_chatroom_root"
+        groups="base.group_system"
+        sequence="90"
+    />
+    <menuitem
+        id="menu_chatroom_pasarelas"
+        name="Pasarelas"
+        parent="menu_chatroom_config"
+        action="mail_gateway_alma_action"
+        sequence="10"
+    />
+</odoo>

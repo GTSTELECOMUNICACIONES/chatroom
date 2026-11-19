@@ -1,0 +1,31 @@
+# Ruff para los modulos Odoo de GTS Racing.
+#
+# Copiado tal cual del repositorio `alma_copilot`, donde ya esta razonado
+# por que cada regla esta donde esta. Mismo criterio en los dos sitios: si
+# un linter se comporta distinto segun el repositorio, deja de ser una
+# referencia y pasa a ser una molestia.
+#
+# POR QUE ESTE FICHERO EXISTE, 15-10-2026. Este repositorio no lo tenia, asi
+# que ruff aplicaba sus reglas por defecto y sacaba DIECISIETE avisos: quince
+# de estilo que en Odoo son normales —los __init__.py que no usan lo que
+# importan, el manifiesto que es un diccionario suelto, los _sql_constraints—
+# y DOS DE VERDAD: un `on_delta` sin definir en el camino del proveedor de
+# respaldo, que habria reventado con NameError justo el dia que se cayera
+# Gemini. O sea, en el unico camino que no se prueba nunca.
+#
+# Los dos de verdad estaban enterrados entre los quince. UN LINTER QUE GRITA
+# POR TODO ESCONDE AL LOBO: la configuracion no es comodidad, es lo que hace
+# que un aviso signifique algo.
+line-length = 88
+
+[lint]
+# E501 la cubre black; B018 y F401 se tratan por fichero mas abajo.
+# "I" (orden de imports) NO se activa a proposito: su criterio no conoce la
+# convencion de Odoo, donde `odoo.addons.*` va despues de `odoo.*`.
+select = ["E", "F", "W", "B", "UP"]
+
+[lint.per-file-ignores]
+# En Odoo, __init__.py no usa lo que importa: solo hace que el ORM lo cargue.
+"**/__init__.py" = ["F401"]
+# El manifiesto ES un diccionario suelto. Asi lo lee Odoo.
+"**/__manifest__.py" = ["B018"]

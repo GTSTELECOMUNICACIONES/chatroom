@@ -1,0 +1,75 @@
+<?xml version="1.0" encoding="utf-8" ?>
+<odoo>
+    <!-- La pantalla basica: la cola. La conversacion se abre en Discuss, que
+         es donde la mete la pasarela; no se reconstruye la bandeja. -->
+    <record id="discuss_channel_alma_list" model="ir.ui.view">
+        <field name="name">discuss.channel.list (gts_chatroom)</field>
+        <field name="model">discuss.channel</field>
+        <field name="priority">50</field>
+        <field name="arch" type="xml">
+            <list
+                create="0"
+                delete="0"
+                decoration-danger="alma_relevo == 'esperando'"
+                decoration-muted="alma_relevo == 'resuelta'"
+            >
+                <field name="name" string="Contacto" />
+                <field name="gateway_channel_token" string="Teléfono" />
+                <field name="alma_relevo" widget="badge" />
+                <field name="alma_asignado_a" optional="show" />
+                <field name="alma_esperando_desde" optional="show" />
+                <field name="alma_ultimo_mensaje" />
+                <button
+                    type="object"
+                    name="action_alma_abrir"
+                    string="Abrir"
+                    icon="fa-comments"
+                />
+            </list>
+        </field>
+    </record>
+
+    <record id="discuss_channel_alma_search" model="ir.ui.view">
+        <field name="name">discuss.channel.search (gts_chatroom)</field>
+        <field name="model">discuss.channel</field>
+        <field name="priority">50</field>
+        <field name="arch" type="xml">
+            <search>
+                <field name="name" string="Contacto" />
+                <field name="gateway_channel_token" string="Teléfono" />
+                <filter
+                    name="esperando"
+                    string="Esperando"
+                    domain="[('alma_relevo', '=', 'esperando')]"
+                />
+                <filter
+                    name="asistiendo"
+                    string="Asistiendo"
+                    domain="[('alma_relevo', '=', 'humano')]"
+                />
+                <filter
+                    name="ia"
+                    string="Con la IA"
+                    domain="[('alma_relevo', '=', 'ia')]"
+                />
+                <separator />
+                <filter
+                    name="abiertas"
+                    string="Abiertas"
+                    domain="[('alma_relevo', '!=', 'resuelta')]"
+                />
+                <filter name="por_relevo" string="Relevo" context="{'group_by': 'alma_relevo'}" />
+            </search>
+        </field>
+    </record>
+
+    <record id="discuss_channel_alma_action" model="ir.actions.act_window">
+        <field name="name">Conversaciones</field>
+        <field name="res_model">discuss.channel</field>
+        <field name="view_mode">list</field>
+        <field name="view_id" ref="discuss_channel_alma_list" />
+        <field name="search_view_id" ref="discuss_channel_alma_search" />
+        <field name="domain">[('alma_es', '=', True)]</field>
+        <field name="context">{'search_default_abiertas': 1}</field>
+    </record>
+</odoo>

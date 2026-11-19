@@ -1,0 +1,9 @@
+<?xml version="1.0" encoding="utf-8" ?>
+<odoo noupdate="1">
+    <!-- Quien firma en Odoo lo que contesta la IA del portal. Un contacto y no
+         un usuario: un usuario de Odoo Enterprise cuesta licencia. -->
+    <record id="partner_alma_ia" model="res.partner">
+        <field name="name">Alma (IA)</field>
+        <field name="active" eval="True" />
+    </record>
+</odoo>
