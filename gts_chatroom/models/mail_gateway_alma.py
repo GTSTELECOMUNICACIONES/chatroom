@@ -528,7 +528,12 @@ class MailGatewayAlma(models.AbstractModel):
         identificador a secas: «error_interno» no es para una persona
         (Carlos, 21-11-2026). Los motivos que el portal aun no manda (saldo,
         ventana de 24 h…) se quedan: son adelanto, no basura."""
-        return MOTIVOS.get(motivo) or frase or motivo or self.env._("Error del portal.")
+        nuestro = MOTIVOS.get(motivo)
+        if nuestro and frase and frase != nuestro:
+            # Las dos: la nuestra dice que hacer en Odoo, la del portal trae
+            # el detalle que solo el sabe (p. ej. de que cuenta es la clave).
+            return f"{nuestro}\n\n{frase}"
+        return nuestro or frase or motivo or self.env._("Error del portal.")
 
     def _alma_texto_error(self, respuesta, datos):
         """El texto para la persona de un error del portal, sea cual sea la
