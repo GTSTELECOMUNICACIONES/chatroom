@@ -38,6 +38,13 @@ nunca en el fichero.** Escenarios: `cliente`, `ia`, `escala`, `movil`,
     export ALMA_NUMERO=15555550100        # el número de la pasarela
     python3 tools/simular_portal.py recorrido
 
+**Odoo no sigue redirecciones del portal (0.3.5).** Medido el 21-11-2026: las
+rutas `/api/odoo/*` de la dirección configurada contestaban `307` a `/login`
+(no llegaban al código del portal) y Odoo, siguiéndola, leía la página de
+login como «ningún evento»: «Recuperados 0 eventos» sin error. Ahora una
+respuesta que no sea 2xx con JSON es un error a la vista (en «Recuperar», en
+el mensaje que sale, en el relevo) y en el log del cron.
+
 **El controlador de la OCA contesta `200 {}` también cuando rechaza la firma**
 (o no encuentra la pasarela, o no está integrada): un 200 no prueba que haya
 entrado. Se mira en Odoo, o en el log («could not be verified»).

@@ -413,9 +413,25 @@ class MailGatewayAlma(models.AbstractModel):
         # «fallido» a la vista y lo reenvia una persona. Un GET tampoco: el
         # reintento de /desde es la siguiente pasada del cron, y un hilo de
         # cron no puede quedarse 2 x TIMEOUT esperando.
+        #
+        # SIN SEGUIR REDIRECCIONES. Medido el 21-11-2026: una ruta del portal
+        # que no llega a su codigo contesta 307 a /login; requests la seguia
+        # en el GET y la pagina de login, 200 en HTML, se leia como «ningun
+        # evento» sin error. Una redireccion es siempre un fallo a la vista.
         return requests.request(
-            metodo, url, headers=cabeceras, timeout=TIMEOUT, **kwargs
+            metodo,
+            url,
+            headers=cabeceras,
+            timeout=TIMEOUT,
+            allow_redirects=False,
+            **kwargs,
         )
+
+    def _alma_ok(self, respuesta, datos):
+        """Una respuesta del portal vale si es 2xx Y trae JSON. Un 2xx en HTML
+        (una pagina de login, de error de Vercel…) no es el portal hablando:
+        leerlo como «vacio» es el cero mudo que tapo el primer mensaje."""
+        return 200 <= respuesta.status_code < 300 and bool(datos)
 
     def _send(
         self,
@@ -451,7 +467,7 @@ class MailGatewayAlma(models.AbstractModel):
                 },
             )
             datos = self._alma_json(respuesta)
-            if respuesta.status_code >= 400:
+            if not self._alma_ok(respuesta, datos):
                 motivo = datos.get("alma_motivo")
                 record.sudo().write(
                     {
@@ -524,9 +540,24 @@ class MailGatewayAlma(models.AbstractModel):
                 "El portal de Alma no acepta la clave de esta pasarela. Revisa "
                 "la clave en la configuración."
             )
+        if 300 <= respuesta.status_code < 400:
+            return self.env._(
+                "El portal de Alma ha contestado con una redirección a "
+                "%(destino)s en lugar de atender la llamada: esa ruta no está "
+                "disponible en la dirección configurada. Revisa la URL del "
+                "portal o avisa a quien lo mantiene.",
+                destino=respuesta.headers.get("Location") or "?",
+            )
         motivo = datos.get("alma_motivo")
         if motivo or datos.get("error"):
             return self._alma_texto_motivo(motivo, datos.get("error"))
+        if not datos:
+            return self.env._(
+                "El portal de Alma ha contestado %(codigo)s, pero no con la "
+                "respuesta esperada (no es JSON). Avisa a quien mantiene el "
+                "portal.",
+                codigo=respuesta.status_code,
+            )
         return f"[{respuesta.status_code}] {respuesta.text[:300]}"
 
     def _alma_fecha(self, valor):
@@ -578,7 +609,7 @@ class MailGatewayAlma(models.AbstractModel):
                 )
             ) from error
         datos = self._alma_json(respuesta)
-        if respuesta.status_code >= 400:
+        if not 200 <= respuesta.status_code < 300:
             error = self._alma_texto_error_relevo(respuesta, datos, cuerpo)
             if not isinstance(datos.get("estado"), dict):
                 raise UserError(error)
@@ -656,7 +687,9 @@ class MailGatewayAlma(models.AbstractModel):
                 params={"numero": _digitos(gateway.alma_numero), "desde": desde_iso},
             )
             datos = self._alma_json(respuesta)
-            if respuesta.status_code >= 400:
+            if not self._alma_ok(respuesta, datos) or not isinstance(
+                datos.get("eventos", []), list
+            ):
                 raise UserError(self._alma_texto_error(respuesta, datos))
             for evento in datos.get("eventos") or []:
                 if isinstance(evento, dict) and self._alma_procesar(gateway, evento):
