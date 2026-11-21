@@ -22,11 +22,14 @@ from datetime import UTC, datetime, timedelta
 import requests
 from markupsafe import Markup
 
-from odoo import api, models
+from odoo import api, models, modules
 from odoo.http import request
 from odoo.tools import html2plaintext, plaintext2html
 
 from odoo.exceptions import UserError
+
+from odoo.modules.registry import Registry
+from odoo.service.model import PG_CONCURRENCY_EXCEPTIONS_TO_RETRY
 
 from odoo.addons.base.models.ir_mail_server import MailDeliveryException
 
@@ -43,6 +46,9 @@ MAX_ADJUNTO = 25 * 1024 * 1024
 # Vueltas de /desde con `truncado`: 10 x 500 eventos. Mas, en la siguiente
 # pasada del cron: un hilo de cron colgado es un recurso escaso perdido.
 MAX_VUELTAS = 10
+# Intentos de ESCRIBIR el resultado de un envio si choca con el webhook. El
+# envio en si no se repite nunca.
+MAX_ESCRITURAS = 3
 
 MOTIVOS = {
     "sin_saldo": "No queda saldo de WhatsApp en la cuenta. Hay que recargarla "
@@ -58,6 +64,11 @@ MOTIVOS = {
     # Textos de Carlos, 21-11-2026.
     "numero_desconocido": "El número de WhatsApp configurado en la pasarela no "
     "pertenece a la cuenta del portal de Alma. Revisa la configuración.",
+    # 429 de /enviar: mismo numero, destinatario y texto 3 veces en 5 minutos
+    # (freno del portal tras el bucle del 21-11-2026).
+    "posible_bucle": "El portal ha frenado el envío: el mismo mensaje ha salido "
+    "tres veces en cinco minutos y parece un bucle. Revisa la conversación "
+    "antes de volver a enviarlo.",
 }
 
 # Un correo dentro de un texto de error. Admite letras con tilde: el ejemplo de
@@ -194,14 +205,7 @@ class MailGatewayAlma(models.AbstractModel):
         if evento["estado"]:
             canal._alma_aplicar_estado(evento["estado"], evento["emitido_en"])
         alma_id = mensaje.get("id") and str(mensaje["id"])
-        if alma_id and self.env["mail.message"].sudo().search_count(
-            [
-                ("model", "=", "discuss.channel"),
-                ("res_id", "=", canal.id),
-                ("alma_mensaje_id", "=", alma_id),
-            ],
-            limit=1,
-        ):
+        if alma_id and self._alma_ya_esta(gateway, canal, alma_id):
             return
         body = Markup()
         if mensaje.get("texto"):
@@ -233,7 +237,7 @@ class MailGatewayAlma(models.AbstractModel):
         # pone aqui tambien.
         nuevo = (
             canal.sudo()
-            .with_context(no_gateway_notification=True)
+            .with_context(no_gateway_notification=True, alma_entrante=True)
             .message_post(
                 body=body,
                 author_id=autor.id or False,
@@ -262,6 +266,43 @@ class MailGatewayAlma(models.AbstractModel):
         ):
             canal.sudo().alma_ultimo_mensaje = evento["fecha_mensaje"]
         self._post_process_message(nuevo, canal)
+
+    def _alma_ya_esta(self, gateway, canal, alma_id):
+        """¿Este mensaje del portal ya esta en Odoo? Dos casos:
+
+        - Ya entro antes (el webhook y /desde se solapan a proposito).
+        - ES EL ECO DE UNO QUE MANDO ODOO: el portal devuelve en `mensaje.id`
+          el mismo `mensaje_id` del 202 de /enviar (Carlos, 21-11-2026), que
+          se guarda en la notificacion. Ojo: el eco puede llegar ANTES de que
+          ese id este guardado; lo que corta el bucle de verdad es que lo que
+          entra no sale (`_send`). Esto solo evita el duplicado en pantalla.
+
+        Los ACUSES no pasan por aqui: llevan el mismo id a proposito y tienen
+        que llegar a su notificacion."""
+        if (
+            self.env["mail.message"]
+            .sudo()
+            .search_count(
+                [
+                    ("model", "=", "discuss.channel"),
+                    ("res_id", "=", canal.id),
+                    ("alma_mensaje_id", "=", alma_id),
+                ],
+                limit=1,
+            )
+        ):
+            return True
+        return bool(
+            self.env["mail.notification"]
+            .sudo()
+            .search_count(
+                [
+                    ("gateway_message_id", "=", alma_id),
+                    ("gateway_channel_id.gateway_id", "=", gateway.id),
+                ],
+                limit=1,
+            )
+        )
 
     def _alma_origen(self, mensaje):
         de = mensaje.get("de") or "contacto"
@@ -441,79 +482,218 @@ class MailGatewayAlma(models.AbstractModel):
         raise_exception=False,
         parse_mode=False,
     ):
-        canal = record.gateway_channel_id
+        """Prepara el envio y lo deja para DESPUES DEL COMMIT.
+
+        EL BUCLE DEL 21-11-2026. El POST a /enviar iba dentro de la
+        transaccion del mensaje. El portal mandaba su reenvio por el webhook
+        ANTES de contestar el 202; esa otra peticion publicaba en el mismo
+        canal y escribia su fila (`last_interest_dt`, el estado) y hacia
+        commit primero. Al terminar, la transaccion del mensaje chocaba con
+        ella (SerializationFailure) y Odoo, que reintenta solo los fallos de
+        concurrencia (`odoo/service/model.py`, `retrying`, hasta 5 veces),
+        DESHACIA el mensaje y volvia a ejecutar la peticion entera: otro
+        mensaje, otra notificacion con otro id, otra `Idempotency-Key` y otro
+        POST que el portal SI enviaba. Lo que se deshace en la base no
+        deshace lo que ya salio por la red. (Deducido de la base de staging:
+        el mensaje de David no esta, sus ecos si, y faltan cinco ids de
+        mensaje y cinco de notificacion intercalados con los ecos.)
+
+        Por eso la llamada va en `cr.postcommit`, como hace Odoo con sus
+        propios webhooks (`ir_actions.py`, `_add_post_commit`): solo sale si
+        el mensaje ya esta guardado para siempre, una vez, y un rollback la
+        cancela. El resultado se escribe en un cursor nuevo."""
+        mensaje = record.mail_message_id
+        # RED DE SEGURIDAD: lo que vino del portal no vuelve a salir NUNCA.
+        # Se publica con `no_gateway_notification` y no deberia llegar aqui;
+        # si llega (otro camino, otro modulo), se corta y queda a la vista.
+        # `alma_entrante` cubre el momento en que el mensaje acaba de crearse
+        # y todavia no tiene escritos `alma_origen` ni `alma_mensaje_id`.
+        if (
+            self.env.context.get("alma_entrante")
+            or mensaje.alma_origen
+            or mensaje.alma_mensaje_id
+        ):
+            _logger.warning(
+                "ChatRoom: el mensaje %s vino del portal; no se reenvia",
+                mensaje.id,
+            )
+            record.sudo().write(
+                {
+                    "notification_status": "canceled",
+                    "failure_reason": self.env._(
+                        "Este mensaje vino del portal de Alma: no se vuelve a enviar."
+                    ),
+                }
+            )
+            return
         try:
-            if record.mail_message_id.attachment_ids:
-                # El contrato todavia no dice como viajan los ficheros. Mejor
-                # un fallo visible que un mensaje que sale sin su adjunto.
-                raise MailDeliveryException(
-                    self.env._("Enviar adjuntos todavia no esta disponible.")
+            peticion = self._alma_preparar_envio(gateway, record)
+        except MailDeliveryException as error:
+            self._alma_marcar_fallido(record, str(error))
+            if raise_exception:
+                raise
+            return
+        if not peticion:
+            return
+        record.sudo().write({"notification_status": "process", "alma_estado": False})
+        if modules.module.current_test:
+            # En las pruebas no hay commit: se envia aqui, como `mail.mail`.
+            self._alma_hacer_envio(gateway.id, record.id, peticion)
+            return
+        dbname = self.env.cr.dbname
+        uid = self.env.uid
+        contexto = dict(self.env.context)
+
+        gateway_id = gateway.id
+        record_id = record.id
+
+        @self.env.cr.postcommit.add
+        def _alma_enviar_tras_commit():
+            self._alma_enviar_con_cursor_nuevo(
+                dbname, uid, contexto, gateway_id, record_id, peticion
+            )
+
+    def _alma_preparar_envio(self, gateway, record):
+        """Todo lo que se decide ANTES de enviar, dentro de la transaccion:
+        si un error sale aqui, se ve y no ha salido nada."""
+        if gateway.integrated_webhook_state != "integrated":
+            # Desintegrar la pasarela es el freno de mano: corta las DOS
+            # direcciones. El 21-11-2026 se desintegro para parar el bucle y
+            # un mensaje escrito despues salio igual.
+            raise MailDeliveryException(
+                self.env._(
+                    "La pasarela %s está desintegrada: no se envía nada hasta "
+                    "que se vuelva a integrar.",
+                    gateway.name,
                 )
-            texto = html2plaintext(self._get_message_body(record) or "").strip()
-            if not texto:
+            )
+        if record.mail_message_id.attachment_ids:
+            # El contrato todavia no dice como viajan los ficheros. Mejor
+            # un fallo visible que un mensaje que sale sin su adjunto.
+            raise MailDeliveryException(
+                self.env._("Enviar adjuntos todavia no esta disponible.")
+            )
+        if not gateway.alma_url:
+            raise MailDeliveryException(
+                self.env._("La pasarela %s no tiene la URL del portal.", gateway.name)
+            )
+        texto = html2plaintext(self._get_message_body(record) or "").strip()
+        if not texto:
+            return False
+        canal = record.gateway_channel_id
+        dbuuid = self.env["ir.config_parameter"].sudo().get_param("database.uuid")
+        return {
+            # El id de la notificacion YA GUARDADA: tras el commit no hay
+            # reintento que lo cambie, asi que la clave es estable.
+            "idempotency_key": f"odoo-{dbuuid}-{record.id}",
+            "json": {
+                "numero": _digitos(gateway.alma_numero),
+                "conversacion_id": canal.alma_conversacion_id or None,
+                "a": canal.gateway_channel_token,
+                "texto": texto,
+                "operador": record.mail_message_id.author_id.name,
+            },
+        }
+
+    def _alma_enviar_con_cursor_nuevo(
+        self, dbname, uid, contexto, gateway_id, record_id, peticion
+    ):
+        """El POST UNA vez, fuera de cualquier transaccion. Lo que se
+        reintenta, si choca con el webhook, es solo ESCRIBIR el resultado."""
+        try:
+            with Registry(dbname).cursor() as cr:
+                env = api.Environment(cr, uid, contexto)
+                gateway = env["mail.gateway"].sudo().browse(gateway_id)
+                respuesta, error = env["mail.gateway.alma"]._alma_post_enviar(
+                    gateway, peticion
+                )
+        except Exception as fallo:  # noqa: BLE001 - nunca puede tumbar el commit
+            _logger.exception("ChatRoom: no se pudo enviar %s", record_id)
+            respuesta, error = None, fallo
+        for intento in range(1, MAX_ESCRITURAS + 1):
+            try:
+                with Registry(dbname).cursor() as cr:
+                    env = api.Environment(cr, uid, contexto)
+                    Alma = env["mail.gateway.alma"]
+                    record = env["mail.notification"].sudo().browse(record_id)
+                    Alma._alma_guardar_resultado(record, respuesta, error)
                 return
-            dbuuid = self.env["ir.config_parameter"].sudo().get_param("database.uuid")
+            except PG_CONCURRENCY_EXCEPTIONS_TO_RETRY:
+                if intento == MAX_ESCRITURAS:
+                    _logger.exception(
+                        "ChatRoom: salio %s, pero no se pudo guardar el resultado",
+                        record_id,
+                    )
+                    return
+                time.sleep(0.5 * intento)
+
+    def _alma_post_enviar(self, gateway, peticion):
+        try:
             respuesta = self._alma_peticion(
                 gateway,
                 "POST",
                 "/api/odoo/enviar",
-                headers={"Idempotency-Key": f"odoo-{dbuuid}-{record.id}"},
-                json={
-                    "numero": _digitos(gateway.alma_numero),
-                    "conversacion_id": canal.alma_conversacion_id or None,
-                    "a": canal.gateway_channel_token,
-                    "texto": texto,
-                    "operador": record.mail_message_id.author_id.name,
-                },
+                headers={"Idempotency-Key": peticion["idempotency_key"]},
+                json=peticion["json"],
             )
-            datos = self._alma_json(respuesta)
-            if not self._alma_ok(respuesta, datos):
-                motivo = datos.get("alma_motivo")
-                record.sudo().write(
-                    {
-                        "alma_estado": "fallido",
-                        "alma_motivo": motivo or False,
-                        "notification_status": "exception",
-                        "failure_type": "unknown",
-                        "failure_reason": self._alma_texto_error(respuesta, datos),
-                    }
-                )
-            else:
-                # 202 {mensaje_id, estado} y, quiza, conversacion_id: puede no
-                # venir. Con `repetido: true` el portal devuelve lo de la
-                # primera vez sin volver a enviar; aqui se escribe lo mismo
-                # sobre lo mismo, asi que no se duplica nada.
-                vals = {
-                    "gateway_message_id": datos.get("mensaje_id") or False,
-                    "failure_reason": False,
-                    "alma_estado": False,
-                }
-                record.sudo().write(vals)
-                # El mismo id en el mensaje: si el portal lo devuelve como
-                # evento, se descarta como repetido en vez de salir dos veces.
-                record.mail_message_id.sudo().alma_mensaje_id = (
-                    datos.get("mensaje_id") or False
-                )
-                record._alma_avanzar(datos.get("estado") or "en_cola")
-                if datos.get("conversacion_id") and not canal.alma_conversacion_id:
-                    canal.sudo().alma_conversacion_id = str(datos["conversacion_id"])
-        except Exception as error:
+        except Exception as error:  # noqa: BLE001
+            return None, error
+        return respuesta, None
+
+    def _alma_hacer_envio(self, gateway_id, record_id, peticion):
+        """Lo mismo, con el cursor de ahora (solo para las pruebas)."""
+        gateway = self.env["mail.gateway"].sudo().browse(gateway_id)
+        record = self.env["mail.notification"].sudo().browse(record_id)
+        respuesta, error = self._alma_post_enviar(gateway, peticion)
+        self._alma_guardar_resultado(record, respuesta, error)
+
+    def _alma_guardar_resultado(self, record, respuesta, error):
+        if error is not None or respuesta is None:
             _logger.warning("ChatRoom: no se pudo enviar %s: %s", record.id, error)
-            if raise_exception:
-                raise MailDeliveryException(
-                    self.env._("No se pudo enviar el mensaje por WhatsApp.")
-                ) from error
+            self._alma_marcar_fallido(record, str(error))
+            return
+        datos = self._alma_json(respuesta)
+        if not self._alma_ok(respuesta, datos):
             record.sudo().write(
                 {
                     "alma_estado": "fallido",
+                    "alma_motivo": datos.get("alma_motivo") or False,
                     "notification_status": "exception",
                     "failure_type": "unknown",
-                    "failure_reason": str(error),
+                    "failure_reason": self._alma_texto_error(respuesta, datos),
                 }
             )
-        if auto_commit is True:
-            # pylint: disable=invalid-commit
-            self.env.cr.commit()
+            record.mail_message_id._notify_message_notification_update()
+            return
+        # 202 {mensaje_id, estado} y, quiza, conversacion_id: puede no venir.
+        # Con `repetido: true` el portal devuelve lo de la primera vez sin
+        # volver a enviar; aqui se escribe lo mismo sobre lo mismo.
+        record.sudo().write(
+            {
+                "gateway_message_id": datos.get("mensaje_id") or False,
+                "failure_reason": False,
+                "alma_estado": False,
+            }
+        )
+        # OJO: NO se escribe `alma_mensaje_id` en el mensaje que sale. Ese
+        # campo dice «vino del portal» y la red de seguridad de `_send` lo
+        # lee. El eco se reconoce por `gateway_message_id` de la notificacion.
+        record._alma_avanzar(datos.get("estado") or "en_cola")
+        canal = record.gateway_channel_id
+        if datos.get("conversacion_id") and not canal.alma_conversacion_id:
+            canal.sudo().alma_conversacion_id = str(datos["conversacion_id"])
+        record.mail_message_id._notify_message_notification_update()
+
+    def _alma_marcar_fallido(self, record, texto):
+        record.sudo().write(
+            {
+                "alma_estado": "fallido",
+                "notification_status": "exception",
+                "failure_type": "unknown",
+                "failure_reason": texto,
+            }
+        )
+        record.mail_message_id._notify_message_notification_update()
 
     def _alma_json(self, respuesta):
         try:

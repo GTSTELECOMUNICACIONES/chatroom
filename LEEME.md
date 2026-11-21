@@ -29,7 +29,7 @@ Hace de portal contra la URL de entrada de una pasarela: construye los eventos
 con la forma exacta del contrato de abajo, los firma igual que espera el
 controlador y los manda. **La URL y el secreto van por variable de entorno,
 nunca en el fichero.** Escenarios: `cliente`, `ia`, `escala`, `movil`,
-`estado`, `acuse`, `repetido`, `viejo` y `recorrido` (todos seguidos).
+`estado`, `acuse`, `repetido`, `eco`, `viejo` y `recorrido` (todos seguidos).
 `--solo-imprimir` enseña la petición sin mandarla; `--firma-mala` y
 `--desfase 400` tienen que ser rechazadas.
 
@@ -37,6 +37,51 @@ nunca en el fichero.** Escenarios: `cliente`, `ia`, `escala`, `movil`,
     export ALMA_SECRETO='<el secreto de la ficha>'
     export ALMA_NUMERO=15555550100        # el número de la pasarela
     python3 tools/simular_portal.py recorrido
+
+## El bucle de eco del 21-11-2026 (arreglado en 0.3.7)
+
+**Qué pasó.** David contestó desde Odoo; el POST a `/api/odoo/enviar` iba
+DENTRO de la transacción del mensaje, y el portal mandaba el eco por el
+webhook ANTES de contestar el 202. El eco se publicaba (sin reenviarse: ya
+llevaba `no_gateway_notification`) y escribía la fila del canal; la
+transacción de David chocaba con ella al terminar (`SerializationFailure`) y
+Odoo **reintentaba la petición entera** (`odoo/service/model.py`, `retrying`,
+hasta 5 veces con espera aleatoria creciente): deshacía el mensaje en la base,
+pero el POST ya había salido, y lo repetía con OTRA notificación, OTRA
+`Idempotency-Key` y otro WhatsApp. Por eso el mensaje de David no está en la
+base y sí sus ecos, y por eso faltan ids de mensaje y de notificación.
+
+**Las defensas, independientes:**
+
+1. **El envío va en `cr.postcommit`**, como los webhooks del propio Odoo:
+   sale una vez y solo si el mensaje ya está guardado; un rollback lo cancela.
+   El resultado se escribe en un cursor nuevo, y si choca con el webhook se
+   reintenta ESCRIBIR, nunca enviar.
+2. **Lo que entra del portal no sale nunca**: se publica con
+   `no_gateway_notification` y `alma_entrante`, y `_send` corta cualquier
+   mensaje con `alma_origen` o `alma_mensaje_id` (queda «cancelado» a la vista).
+3. **El eco de lo que mandó Odoo se reconoce** por el id: el portal devuelve
+   en `mensaje.id` el mismo `mensaje_id` del 202 (Carlos), guardado en
+   `mail.notification.gateway_message_id`. Puede llegar antes de que esté
+   guardado; entonces se vería dos veces, pero no sale (defensa 2). Los
+   **acuses** con ese id siguen llegando a su notificación.
+4. **Una pasarela desintegrada no envía**: es el freno de mano y corta las
+   dos direcciones (el 21-11 salió un mensaje después de desintegrarla).
+5. Del portal (Carlos): ya no reenvía a Odoo lo que entra por `/enviar`, y
+   frena con **429 `posible_bucle`** el mismo texto al mismo destinatario 3
+   veces en 5 minutos.
+
+**Comprobarlo sin el portal:** con la pasarela integrada y el teléfono
+FICTICIO del simulador (nunca uno real: si fallara, saldría un WhatsApp),
+
+    python3 tools/simular_portal.py eco
+
+y en Odoo: el mensaje sale como la empresa, origen «Equipo, desde el ChatRoom»,
+y **no tiene notificación de pasarela** (`mail.notification` con
+`notification_type = gateway` y ese mensaje: cero); en el log no aparece
+ninguna llamada a `/api/odoo/enviar`. Con `--mensaje-id <gateway_message_id>`
+de un envío de Odoo, además no aparece dos veces. Las pruebas unitarias están
+en `gts_chatroom/tests/test_eco.py`.
 
 **Odoo no sigue redirecciones del portal (0.3.5).** Medido el 21-11-2026: las
 rutas `/api/odoo/*` de la dirección configurada contestaban `307` a `/login`

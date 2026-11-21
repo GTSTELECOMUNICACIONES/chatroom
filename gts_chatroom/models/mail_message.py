@@ -16,8 +16,10 @@ ORIGENES = [
 class MailMessage(models.Model):
     _inherit = "mail.message"
 
-    # El id del mensaje en el portal. Sirve para descartar repetidos: al
-    # recuperar se pide con cinco minutos de margen a proposito, y el portal
-    # devuelve por el webhook lo que escribe un operador desde Odoo.
+    # El id del mensaje en el portal, SOLO en lo que ENTRA del portal. Sirve
+    # para descartar repetidos (al recuperar se pide con cinco minutos de
+    # margen a proposito) y, junto con `alma_origen`, para que lo que entra no
+    # vuelva a salir nunca (`_send`). Lo que sale guarda el id del portal en
+    # `mail.notification.gateway_message_id`, no aqui (desde 0.3.7).
     alma_mensaje_id = fields.Char(index="btree_not_null", readonly=True)
     alma_origen = fields.Selection(ORIGENES, readonly=True)

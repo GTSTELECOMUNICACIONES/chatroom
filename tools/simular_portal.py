@@ -228,6 +228,31 @@ def esc_viejo(args):
     return [nuevo, viejo]
 
 
+def esc_eco(args):
+    """EL BUCLE DEL 21-11-2026. El portal reenvia a Odoo lo que escribe un
+    operador (desde el ChatRoom del portal y, hasta que Carlos lo corto, lo
+    que salia de Odoo) como `mensaje` con de=operador. Odoo tiene que
+    PUBLICARLO y NO volver a mandarlo a /enviar.
+
+    Con `--mensaje-id <gateway_message_id de un envio de Odoo>` es el eco de
+    un mensaje que mando Odoo: ademas, no tiene que aparecer dos veces.
+
+    Se comprueba en Odoo, no aqui (el controlador contesta 200 siempre): el
+    mensaje sale como la empresa, con origen «Equipo, desde el ChatRoom», y
+    NO tiene notificacion de pasarela (mail.notification de tipo gateway).
+    Usar SIEMPRE el telefono ficticio: si el arreglo fallara, saldria un
+    WhatsApp de verdad."""
+    texto = args.texto or "Eco de prueba: esto no tiene que volver a salir."
+    return [
+        evento(
+            args,
+            "mensaje",
+            mensaje=mensaje("operador", texto, args.mensaje_id),
+            estado=estado("humano", espera=False),
+        )
+    ]
+
+
 def esc_recorrido(args):
     """Una conversacion entera: escribe, contesta la IA, escala, se repite un
     mensaje y llega un evento viejo."""
@@ -245,6 +270,7 @@ ESCENARIOS = {
     "estado": (esc_estado, "solo un cambio de estado (--relevo, --espera...)"),
     "acuse": (esc_acuse, "acuse de un mensaje enviado (--mensaje-id, --estado)"),
     "repetido": (esc_repetido, "el mismo mensaje.id dos veces"),
+    "eco": (esc_eco, "un operador del portal (de=operador): se publica y NO sale"),
     "viejo": (esc_viejo, "un estado viejo que llega despues de uno nuevo"),
     "recorrido": (esc_recorrido, "todo lo anterior seguido, menos acuse y movil"),
 }
