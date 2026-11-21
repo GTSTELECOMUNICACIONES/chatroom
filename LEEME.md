@@ -242,3 +242,8 @@ los botones de la cola darán error (a la vista, y sin cambiar nada).
 - La pantalla de Ajustes.
 - El cron de avisos con `_trigger`, y la actividad en la ficha del contacto.
 - El cron de `/desde` contra el portal de verdad.
+- **Sacar la descarga de adjuntos del webhook** antes de que el portal guarde
+  ficheros: el portal corta el reenvío a los 3,5 s (Carlos, 21-11-2026) y la
+  descarga va hoy dentro. No se pierde nada (lo recoge `/desde`), pero se pierde
+  la inmediatez.
+
