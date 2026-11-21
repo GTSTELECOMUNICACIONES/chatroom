@@ -383,7 +383,10 @@ class MailGatewayAlma(models.AbstractModel):
             )
         )
         cambiadas = notificaciones._alma_avanzar(
-            acuse.get("estado"), acuse.get("alma_motivo"), acuse.get("detalle")
+            acuse.get("estado"),
+            acuse.get("alma_motivo"),
+            acuse.get("detalle"),
+            acuse.get("error"),
         )
         for mensaje in cambiadas.mail_message_id:
             mensaje._notify_message_notification_update()
@@ -503,8 +506,13 @@ class MailGatewayAlma(models.AbstractModel):
             return {}
         return datos if isinstance(datos, dict) else {}
 
-    def _alma_texto_motivo(self, motivo):
-        return MOTIVOS.get(motivo) or motivo or self.env._("Error del portal.")
+    def _alma_texto_motivo(self, motivo, frase=None):
+        """Nuestro texto si conocemos el motivo; si no, LA FRASE DEL PORTAL,
+        que siempre manda una en castellano junto al motivo. Nunca el
+        identificador a secas: «error_interno» no es para una persona
+        (Carlos, 21-11-2026). Los motivos que el portal aun no manda (saldo,
+        ventana de 24 h…) se quedan: son adelanto, no basura."""
+        return MOTIVOS.get(motivo) or frase or motivo or self.env._("Error del portal.")
 
     def _alma_texto_error(self, respuesta, datos):
         """El texto para la persona de un error del portal, sea cual sea la
@@ -517,8 +525,8 @@ class MailGatewayAlma(models.AbstractModel):
                 "la clave en la configuración."
             )
         motivo = datos.get("alma_motivo")
-        if motivo:
-            return self._alma_texto_motivo(motivo)
+        if motivo or datos.get("error"):
+            return self._alma_texto_motivo(motivo, datos.get("error"))
         return f"[{respuesta.status_code}] {respuesta.text[:300]}"
 
     def _alma_fecha(self, valor):

@@ -32,7 +32,7 @@ class MailNotification(models.Model):
     )
     alma_motivo = fields.Char(readonly=True)
 
-    def _alma_avanzar(self, estado, motivo=False, detalle=False):
+    def _alma_avanzar(self, estado, motivo=False, detalle=False, frase=False):
         """Pone el estado si es MAS AVANZADO que el que hay. Los acuses no
         llegan en orden: un «entregado» puede entrar antes que su «salio»."""
         cambiados = self.browse()
@@ -56,8 +56,9 @@ class MailNotification(models.Model):
                     {
                         "alma_motivo": motivo or False,
                         "failure_type": "unknown",
-                        "failure_reason": detalle
-                        or self.env["mail.gateway.alma"]._alma_texto_motivo(motivo),
+                        "failure_reason": self.env[
+                            "mail.gateway.alma"
+                        ]._alma_texto_motivo(motivo, frase or detalle),
                     }
                 )
             notification.sudo().write(vals)
