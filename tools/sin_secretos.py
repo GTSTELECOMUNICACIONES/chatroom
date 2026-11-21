@@ -19,18 +19,30 @@ PROHIBIDO = [
     # La direccion del portal: decision de David. Si va en el codigo, un
     # repositorio publico la publica, y el modulo deja de ser inutil para
     # quien se lo lleve.
-    (re.compile(r"https?://[\w.-]*(gtsagent|alma)[\w.-]*\.(ai|com|es|net)", re.I),
-     "la direccion del portal va en un campo de configuracion, no en el codigo"),
+    (
+        re.compile(r"https?://[\w.-]*(gtsagent|alma)[\w.-]*\.(ai|com|es|net)", re.I),
+        "la direccion del portal va en un campo de configuracion, no en el codigo",
+    ),
     # Claves y secretos sueltos.
-    (re.compile(r"\b[0-9a-f]{64}\b"),
-     "parece una clave o un secreto de 64 caracteres"),
-    (re.compile(r"(secret|token|api[_-]?key|password|passwd)\s*[:=]\s*['\"][^'\"]{12,}", re.I),
-     "parece un secreto escrito a mano"),
-    (re.compile(r"\bsk-[A-Za-z0-9]{20,}|\bghp_[A-Za-z0-9]{20,}|\bEAA[A-Za-z0-9]{40,}"),
-     "parece una clave de un proveedor (OpenAI, GitHub o Meta)"),
+    (re.compile(r"\b[0-9a-f]{64}\b"), "parece una clave o un secreto de 64 caracteres"),
+    (
+        re.compile(
+            r"(secret|token|api[_-]?key|password|passwd)\s*[:=]\s*['\"][^'\"]{12,}",
+            re.I,
+        ),
+        "parece un secreto escrito a mano",
+    ),
+    (
+        re.compile(
+            r"\bsk-[A-Za-z0-9]{20,}|\bghp_[A-Za-z0-9]{20,}|\bEAA[A-Za-z0-9]{40,}"
+        ),
+        "parece una clave de un proveedor (OpenAI, GitHub o Meta)",
+    ),
     # Datos de clientes en ficheros de prueba.
-    (re.compile(r"\+?34[\s-]?[6-9]\d{2}[\s-]?\d{2}[\s-]?\d{2}[\s-]?\d{2}"),
-     "parece un telefono espanol real; en las pruebas van numeros inventados"),
+    (
+        re.compile(r"\+?34[\s-]?[6-9]\d{2}[\s-]?\d{2}[\s-]?\d{2}[\s-]?\d{2}"),
+        "parece un telefono espanol real; en las pruebas van numeros inventados",
+    ),
 ]
 
 # Lo que no se mira: ficheros binarios y el propio comprobador, que contiene

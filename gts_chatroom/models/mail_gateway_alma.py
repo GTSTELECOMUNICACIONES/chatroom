@@ -151,7 +151,7 @@ class MailGatewayAlma(models.AbstractModel):
         {tipo, emitido_en, numero,
          conversacion: {id, contacto: {telefono, nombre}},
          mensaje: {id, de: contacto|ia|operador|movil|sistema, texto,
-                   fecha (⚠ propuesta, opcional),
+                   cuando (la hora real del mensaje, ISO),
                    adjuntos: [{nombre o null, mime, url o null}]},
          acuse: {mensaje_id, estado, alma_motivo, detalle},
          estado: {relevo: ia|humano|resuelta, asignado_a, espera,
@@ -164,12 +164,12 @@ class MailGatewayAlma(models.AbstractModel):
         return {
             "tipo": update.get("tipo"),
             "emitido_en": emitido_en,
-            # ⚠ La fecha DEL MENSAJE. En /desde todos los eventos de una
-            # respuesta llevan el mismo `emitido_en` (la hora de la respuesta):
-            # sin esto, lo recuperado saldria en Discuss con la hora de la
-            # recuperacion. Si no viene, `emitido_en`, como hasta ahora.
+            # La hora DEL MENSAJE, `cuando` (confirmado por Carlos, 21-11). En
+            # /desde todos los eventos de una respuesta llevan el mismo
+            # `emitido_en`: sin esto, lo recuperado saldria en Discuss con la
+            # hora de la recuperacion. Si no viene, `emitido_en`.
             "fecha_mensaje": (
-                _fecha(mensaje["fecha"]) if mensaje.get("fecha") else emitido_en
+                _fecha(mensaje["cuando"]) if mensaje.get("cuando") else emitido_en
             ),
             "numero": _digitos(update.get("numero")),
             "conversacion_id": conversacion.get("id") and str(conversacion["id"]),
@@ -540,8 +540,12 @@ class MailGatewayAlma(models.AbstractModel):
         }
 
     def _alma_relevo(self, gateway, canal, relevo, usuario):
-        """Pide el cambio de relevo al portal. Devuelve lo que conteste si lo
-        acepta; si no, UserError con el motivo y NADA cambia en Odoo."""
+        """Pide el cambio de relevo al portal. Devuelve (datos, error).
+
+        El portal devuelve SIEMPRE el estado resultante, tambien con un error
+        (Carlos, 21-11-2026): pedir «humano» para alguien que no es miembro
+        devuelve el estado sin asignar MAS el error. Ese estado es la verdad y
+        se copia. Sin estado y con error, UserError y nada cambia."""
         cuerpo = self._alma_cuerpo_relevo(gateway, canal, relevo, usuario)
         dbuuid = self.env["ir.config_parameter"].sudo().get_param("database.uuid")
         # Una clave por pulsacion. Dos pulsaciones son dos peticiones, pero el
@@ -567,8 +571,11 @@ class MailGatewayAlma(models.AbstractModel):
             ) from error
         datos = self._alma_json(respuesta)
         if respuesta.status_code >= 400:
-            raise UserError(self._alma_texto_error_relevo(respuesta, datos, cuerpo))
-        return datos
+            error = self._alma_texto_error_relevo(respuesta, datos, cuerpo)
+            if not isinstance(datos.get("estado"), dict):
+                raise UserError(error)
+            return datos, error
+        return datos, None
 
     def _alma_texto_error_relevo(self, respuesta, datos, cuerpo):
         """⚠ LA FORMA DE ESTE ERROR NO ESTA CERRADA con el portal.

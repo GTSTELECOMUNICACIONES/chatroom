@@ -25,6 +25,7 @@
                 type="object"
             >
                 <field name="alma_cola" />
+                <field name="alma_ultimo_cliente" />
                 <field name="alma_es_mia" />
                 <field name="alma_conversacion_id" />
                 <templates>
@@ -63,7 +64,15 @@
                                 name="action_alma_resolver"
                                 string="Resuelta"
                                 class="btn btn-secondary btn-sm"
-                                invisible="alma_cola == 'resuelta'"
+                                invisible="alma_cola == 'resuelta' or alma_ultimo_cliente"
+                            />
+                            <button
+                                type="object"
+                                name="action_alma_resolver"
+                                string="Resuelta"
+                                class="btn btn-secondary btn-sm"
+                                invisible="alma_cola == 'resuelta' or not alma_ultimo_cliente"
+                                confirm="El último mensaje es del cliente y nadie le ha contestado por WhatsApp. ¿Seguro que está resuelta (por teléfono, en persona…)?"
                             />
                         </footer>
                     </t>
@@ -88,6 +97,7 @@
                 <field name="name" string="Contacto" />
                 <field name="gateway_channel_token" string="Teléfono" />
                 <field name="alma_cola" widget="badge" />
+                <field name="alma_ultimo_cliente" column_invisible="1" />
                 <field name="alma_motivo_relevo" optional="hide" />
                 <field name="alma_asignado_a" optional="show" />
                 <field name="alma_esperando_desde" optional="show" />
@@ -118,7 +128,15 @@
                     name="action_alma_resolver"
                     string="Resuelta"
                     icon="fa-check"
-                    invisible="alma_cola == 'resuelta'"
+                    invisible="alma_cola == 'resuelta' or alma_ultimo_cliente"
+                />
+                <button
+                    type="object"
+                    name="action_alma_resolver"
+                    string="Resuelta"
+                    icon="fa-check"
+                    invisible="alma_cola == 'resuelta' or not alma_ultimo_cliente"
+                    confirm="El último mensaje es del cliente y nadie le ha contestado por WhatsApp. ¿Seguro que está resuelta (por teléfono, en persona…)?"
                 />
             </list>
         </field>

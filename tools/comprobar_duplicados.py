@@ -46,9 +46,11 @@ def main(ruta):
                     continue
                 # Solo molesta en los relacionales: un Char repetido es feo
                 # pero no rompe nada.
-                relacional = campo.find("list") is not None or campo.get(
-                    "widget"
-                ) in ("many2many_tags", "one2many", "many2many")
+                relacional = campo.find("list") is not None or campo.get("widget") in (
+                    "many2many_tags",
+                    "one2many",
+                    "many2many",
+                )
                 vistos.setdefault(nombre, []).append(relacional)
             for nombre, apariciones in vistos.items():
                 if len(apariciones) > 1 and any(apariciones):

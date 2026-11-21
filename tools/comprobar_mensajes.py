@@ -38,7 +38,7 @@ def main(ruta):
         texto = f.read_text(encoding="utf-8", errors="replace")
         for casa in LLAMADA.finditer(texto):
             # el trozo de la llamada: hasta el parentesis que la cierra
-            resto, nivel, fin = texto[casa.end():], 1, 0
+            resto, nivel, fin = texto[casa.end() :], 1, 0
             for i, c in enumerate(resto):
                 if c == "(":
                     nivel += 1
@@ -54,7 +54,7 @@ def main(ruta):
             print(
                 f"{f.name}:{linea}: `message_post` sin `message_type`. Se creará "
                 "como «notification» y el historial, que filtra por tipo, NO lo "
-                "enseñará. Pasa `message_type=\"comment\"`."
+                'enseñará. Pasa `message_type="comment"`.'
             )
             fallos += 1
     return 1 if fallos else 0

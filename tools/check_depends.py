@@ -29,10 +29,26 @@ PLATAFORMAS = {
 # Enterprise conocidos. No se pueden enumerar del fuente: el repo odoo/odoo es
 # Community, y el de Enterprise es privado. Ampliar segun aparezcan.
 ENTERPRISE = {
-    "account_accountant", "account_consolidation", "appointment", "approvals",
-    "documents", "helpdesk", "industry_fsm", "knowledge", "marketing_automation",
-    "planning", "quality", "quality_control", "sale_subscription", "sign",
-    "social", "studio", "timesheet_grid", "voip", "web_studio", "whatsapp",
+    "account_accountant",
+    "account_consolidation",
+    "appointment",
+    "approvals",
+    "documents",
+    "helpdesk",
+    "industry_fsm",
+    "knowledge",
+    "marketing_automation",
+    "planning",
+    "quality",
+    "quality_control",
+    "sale_subscription",
+    "sign",
+    "social",
+    "studio",
+    "timesheet_grid",
+    "voip",
+    "web_studio",
+    "whatsapp",
 }
 
 

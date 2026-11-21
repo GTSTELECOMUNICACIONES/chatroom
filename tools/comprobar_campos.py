@@ -19,12 +19,20 @@ import xml.etree.ElementTree as ET
 
 MIXINS = {
     "image.mixin": {
-        "image_1920", "image_1024", "image_512", "image_256", "image_128",
+        "image_1920",
+        "image_1024",
+        "image_512",
+        "image_256",
+        "image_128",
     },
     "mail.thread": {"message_ids", "message_follower_ids", "activity_ids"},
     "mail.activity.mixin": {
-        "activity_ids", "activity_state", "activity_user_id",
-        "activity_type_id", "activity_date_deadline", "activity_summary",
+        "activity_ids",
+        "activity_state",
+        "activity_user_id",
+        "activity_type_id",
+        "activity_date_deadline",
+        "activity_summary",
     },
 }
 
@@ -38,15 +46,23 @@ def modelos_del_modulo(raiz):
                 continue
             nombre, campos, mix = None, {"id", "display_name"}, []
             for c in n.body:
-                if not (isinstance(c, ast.Assign) and isinstance(c.targets[0], ast.Name)):
+                if not (
+                    isinstance(c, ast.Assign) and isinstance(c.targets[0], ast.Name)
+                ):
                     continue
                 destino = c.targets[0].id
                 if destino == "_name":
                     nombre = c.value.value
                 elif destino == "_inherit":
                     v = c.value
-                    mix = [e.value for e in v.elts] if isinstance(v, ast.List) else [v.value]
-                elif isinstance(c.value, ast.Call) and "fields." in ast.unparse(c.value.func):
+                    mix = (
+                        [e.value for e in v.elts]
+                        if isinstance(v, ast.List)
+                        else [v.value]
+                    )
+                elif isinstance(c.value, ast.Call) and "fields." in ast.unparse(
+                    c.value.func
+                ):
                     campos.add(destino)
             # Un AbstractModel no tiene tabla y no pide ACL: la OCA no la pone
             # a sus mail.gateway.<tipo> y Odoo no la comprueba sin CRUD.

@@ -90,6 +90,8 @@ def mensaje(de, texto, mensaje_id=None, adjuntos=None):
         "id": mensaje_id or f"sim-{uuid.uuid4().hex[:12]}",
         "de": de,
         "texto": texto,
+        # La hora real del mensaje (contrato: `mensaje.cuando`).
+        "cuando": _iso(datetime.now(UTC)),
         "adjuntos": adjuntos or [],
     }
 

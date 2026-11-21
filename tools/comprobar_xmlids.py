@@ -28,6 +28,8 @@ REPO = pathlib.Path(__file__).resolve().parent.parent
 
 def raices(modulo):
     return (REPO / modulo, REF / "addons" / modulo, REF / "odoo" / "addons" / modulo)
+
+
 XMLID = re.compile(r"^([a-z0-9_]+)\.([a-zA-Z0-9_]+)$")
 
 
@@ -80,13 +82,14 @@ def main(ruta):
                     continue
                 if not existe(modulo, nombre):
                     print(
-                        f"{f.name}: <{e.tag} {atributo}=\"{valor}\"> no existe "
+                        f'{f.name}: <{e.tag} {atributo}="{valor}"> no existe '
                         f"en el módulo «{modulo}»"
                     )
                     fallos += 1
     if sin_comprobar:
         print(
-            "   (sin comprobar, no están en ~/ref: %s)" % ", ".join(sorted(sin_comprobar))
+            "   (sin comprobar, no están en ~/ref: %s)"
+            % ", ".join(sorted(sin_comprobar))
         )
     return 1 if fallos else 0
 

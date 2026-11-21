@@ -41,7 +41,9 @@ def campos_declarados(ruta):
                 continue
             nombres, campos = [], set()
             for c in n.body:
-                if not (isinstance(c, ast.Assign) and isinstance(c.targets[0], ast.Name)):
+                if not (
+                    isinstance(c, ast.Assign) and isinstance(c.targets[0], ast.Name)
+                ):
                     continue
                 destino = c.targets[0].id
                 if destino in ("_name", "_inherit"):
@@ -49,8 +51,12 @@ def campos_declarados(ruta):
                     if isinstance(v, ast.Constant):
                         nombres.append(v.value)
                     elif isinstance(v, ast.List):
-                        nombres += [e.value for e in v.elts if isinstance(e, ast.Constant)]
-                elif isinstance(c.value, ast.Call) and "fields." in ast.unparse(c.value.func):
+                        nombres += [
+                            e.value for e in v.elts if isinstance(e, ast.Constant)
+                        ]
+                elif isinstance(c.value, ast.Call) and "fields." in ast.unparse(
+                    c.value.func
+                ):
                     campos.add(destino)
             for nombre in nombres:
                 modelos.setdefault(nombre, set()).update(campos)

@@ -75,6 +75,7 @@ def depends_del_modulo(ruta):
     if not man.is_file():
         return set()
     import ast as _ast
+
     datos = _ast.literal_eval(man.read_text(encoding="utf-8"))
     pendientes, vistos = list(datos.get("depends", [])), set()
     while pendientes:
@@ -86,7 +87,9 @@ def depends_del_modulo(ruta):
             f = base / "__manifest__.py"
             if f.is_file():
                 try:
-                    pendientes += _ast.literal_eval(f.read_text(encoding="utf-8")).get("depends", [])
+                    pendientes += _ast.literal_eval(f.read_text(encoding="utf-8")).get(
+                        "depends", []
+                    )
                 except Exception:
                     pass
     return vistos
@@ -109,7 +112,11 @@ def hermanas(xmlid):
             for rec in raiz.iter("record"):
                 h = rec.find("field[@name='inherit_id']")
                 a = rec.find("field[@name='arch']")
-                if h is not None and a is not None and (h.get("ref") or "").endswith(nombre):
+                if (
+                    h is not None
+                    and a is not None
+                    and (h.get("ref") or "").endswith(nombre)
+                ):
                     archs.append((a, f.parts[f.parts.index("addons") + 1]))
     return archs
 
@@ -188,10 +195,10 @@ def main(ruta):
             for anc in anclajes(arch):
                 if existe(anc, archs) is not None:
                     continue
-                if len(archs) == 1:                     # solo si hace falta
+                if len(archs) == 1:  # solo si hace falta
                     archs += hermanas(padre)
                 donde = existe(anc, archs)
-                que = anc[2] if anc[2] else f"<{anc[0]} name=\"{anc[1]}\">"
+                que = anc[2] if anc[2] else f'<{anc[0]} name="{anc[1]}">'
                 if donde is None:
                     print(f"{f.name}: el anclaje {que} no existe en «{padre}»")
                     fallos += 1
@@ -204,7 +211,8 @@ def main(ruta):
                     fallos += 1
     if sin_comprobar:
         print(
-            "   (sin comprobar, no están en ~/ref: %s)" % ", ".join(sorted(sin_comprobar))
+            "   (sin comprobar, no están en ~/ref: %s)"
+            % ", ".join(sorted(sin_comprobar))
         )
     return 1 if fallos else 0
 

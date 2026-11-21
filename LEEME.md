@@ -118,8 +118,8 @@ Fuera de ±5 minutos se rechaza.
   la cogiera: el caso que con cuatro etiquetas se perdía).
 - Los repetidos se descartan por `mensaje.id`. El estado de un evento más
   viejo no pisa al de uno más nuevo.
-- ⚠ **`mensaje.fecha`** (ISO, opcional), **propuesto por Odoo**: la fecha del
-  mensaje. Hace falta para lo recuperado por `/desde`, donde todos los eventos
+- **`mensaje.cuando`** (ISO; confirmado por Carlos el 21-11-2026): la hora real
+  del mensaje. Hace falta para lo recuperado por `/desde`, donde todos los eventos
   de una respuesta traen el mismo `emitido_en`; sin ella salen en Discuss con
   la hora de la recuperación. Si no viene, se usa `emitido_en`.
 
@@ -215,9 +215,11 @@ los botones de la cola darán error (a la vista, y sin cambiar nada).
 
 - **Nada de 0.3.0 se ha probado en un Odoo**: ni instalado, ni la pantalla, ni
   el cron. Ver «Sin probar» abajo.
-- Que Carlos confirme los ⚠: respuesta de `/relevo`, forma del error del
-  operador no dado de alta, `mensaje.fecha`, y que el estado de `/desde` es el
-  actual.
+- Confirmado por Carlos el 21-11-2026: `/relevo` devuelve SIEMPRE el estado
+  resultante (también con error, y Odoo lo copia), la clave de idempotencia,
+  `mensaje.cuando` y que el estado de `/desde` es el actual. «Resuelta» con el
+  último mensaje del cliente se AVISA, no se impide (los dos lados igual).
+  Queda ⚠ la forma exacta del error del operador no dado de alta.
 - Aviso que se ve y suena: la pestaña parpadeando hasta que alguien la coge y
   el sonido **solo cuando el contador sube**. Es JavaScript y va con cuidado
   (un fallo en la barra superior deja el backend en blanco).

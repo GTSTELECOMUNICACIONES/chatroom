@@ -60,6 +60,8 @@ class DiscussChannel(models.Model):
     alma_relevo = fields.Selection(RELEVO, string="Relevo", readonly=True)
     alma_asignado_a = fields.Char(string="La atiende", readonly=True)
     alma_espera = fields.Boolean(string="Espera respuesta", readonly=True)
+    # Para el aviso de «Resuelta»: no se guarda, se mira al pintar.
+    alma_ultimo_cliente = fields.Boolean(compute="_compute_alma_ultimo_cliente")
     alma_motivo_relevo = fields.Char(string="Motivo del relevo", readonly=True)
     alma_cola = fields.Selection(
         COLA,
@@ -208,16 +210,11 @@ class DiscussChannel(models.Model):
                 self.env._("No tiene permiso para atender conversaciones de WhatsApp.")
             )
         self.check_access("read")
-        if relevo == "resuelta" and self._alma_ultimo_es_del_cliente():
-            # NUNCA SE ESCONDE UNA CONVERSACION CUYO ULTIMO MENSAJE ES DEL
-            # CLIENTE: treinta dias sin contestar ya es un fallo, y quitarla de
-            # la vista lo vuelve invisible.
-            raise UserError(
-                self.env._(
-                    "El último mensaje es del cliente y nadie le ha contestado. "
-                    "Contéstele antes de darla por resuelta, o devuélvala a la IA."
-                )
-            )
+        # «Resuelta» con el ultimo mensaje del cliente SE AVISA, no se impide
+        # (acordado con Carlos, 21-11-2026): puede haberse resuelto por
+        # telefono o en persona, y quien pulsa lo sabe. La regla de «nunca se
+        # archiva» es para el barrido automatico, donde nadie mira. El aviso
+        # es el `confirm` del boton, con `alma_ultimo_cliente`.
         if not self.alma_conversacion_id:
             raise UserError(
                 self.env._(
@@ -232,7 +229,7 @@ class DiscussChannel(models.Model):
         # despues de aplicar el cambio sera mas nuevo y pisara a este.
         antes_de_llamar = fields.Datetime.now()
         Alma = self.env["mail.gateway.alma"]
-        datos = Alma._alma_relevo(self.sudo().gateway_id, self, relevo, usuario)
+        datos, error = Alma._alma_relevo(self.sudo().gateway_id, self, relevo, usuario)
         estado = datos.get("estado") if isinstance(datos.get("estado"), dict) else {}
         if not estado:
             # El portal no devolvio el estado: se pone el que se le pidio.
@@ -253,6 +250,19 @@ class DiscussChannel(models.Model):
             except ValueError:
                 emitido_en = antes_de_llamar
         self._alma_aplicar_estado(estado, emitido_en, confirmado=True)
+        if error:
+            # El portal no hizo lo pedido pero dijo como queda: se copia eso y
+            # se ensena el motivo, sin deshacer la copia.
+            return {
+                "type": "ir.actions.client",
+                "tag": "display_notification",
+                "params": {
+                    "type": "danger",
+                    "sticky": True,
+                    "message": error,
+                    "next": {"type": "ir.actions.client", "tag": "soft_reload"},
+                },
+            }
         if relevo == "humano":
             texto = self.env._("%s atiende la conversación.", usuario.name)
         elif relevo == "ia":
@@ -270,6 +280,12 @@ class DiscussChannel(models.Model):
         if relevo == "humano":
             return self.action_alma_abrir()
         return {"type": "ir.actions.client", "tag": "soft_reload"}
+
+    def _compute_alma_ultimo_cliente(self):
+        for canal in self:
+            canal.alma_ultimo_cliente = bool(
+                canal.id and canal.alma_es and canal._alma_ultimo_es_del_cliente()
+            )
 
     def _alma_ultimo_es_del_cliente(self):
         self.ensure_one()

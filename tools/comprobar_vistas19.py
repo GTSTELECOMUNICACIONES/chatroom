@@ -35,8 +35,17 @@ ATRIBUTO = re.compile(r"([\w:-]+)\s*=")
 # Lo que common.rng permite en <group>. Cualquier otro atributo rompe la
 # instalacion si el <group> esta dentro de una vista search.
 PERMITIDOS_EN_SEARCH = {
-    "position", "groups", "colspan", "rowspan", "fill", "height", "width",
-    "name", "color", "invisible", "col",
+    "position",
+    "groups",
+    "colspan",
+    "rowspan",
+    "fill",
+    "height",
+    "width",
+    "name",
+    "color",
+    "invisible",
+    "col",
 }
 
 
@@ -60,7 +69,7 @@ def main(ruta):
                 en_search = False
             if "<group" not in linea:
                 continue
-            etiqueta = linea[linea.index("<group"):]
+            etiqueta = linea[linea.index("<group") :]
             atributos = set(ATRIBUTO.findall(etiqueta.split(">")[0]))
             if en_search:
                 sobran = sorted(atributos - PERMITIDOS_EN_SEARCH)

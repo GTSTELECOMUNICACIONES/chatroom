@@ -23,10 +23,26 @@ import xml.etree.ElementTree as ET
 
 # odoo/tools/translate.py, TRANSLATED_ATTRS (Odoo 19), sin los t-attf-*.
 TRADUCIBLES = {
-    "string", "add-label", "help", "sum", "avg", "confirm", "placeholder", "alt",
-    "title", "aria-label", "aria-keyshortcuts", "aria-placeholder",
-    "aria-roledescription", "aria-valuetext", "value_label", "data-tooltip",
-    "label", "confirm-label", "confirm-title", "cancel-label",
+    "string",
+    "add-label",
+    "help",
+    "sum",
+    "avg",
+    "confirm",
+    "placeholder",
+    "alt",
+    "title",
+    "aria-label",
+    "aria-keyshortcuts",
+    "aria-placeholder",
+    "aria-roledescription",
+    "aria-valuetext",
+    "value_label",
+    "data-tooltip",
+    "label",
+    "confirm-label",
+    "confirm-title",
+    "cancel-label",
 }
 EN_XPATH = re.compile(r"@(%s)\b" % "|".join(sorted(TRADUCIBLES, key=len, reverse=True)))
 
@@ -35,7 +51,10 @@ def main(ruta):
     malo = 0
     for f in sorted(pathlib.Path(ruta).rglob("*.xml")):
         for rec in ET.parse(f).getroot().iter("record"):
-            if rec.get("model") != "ir.ui.view" or rec.find("field[@name='inherit_id']") is None:
+            if (
+                rec.get("model") != "ir.ui.view"
+                or rec.find("field[@name='inherit_id']") is None
+            ):
                 continue
             arch = rec.find("field[@name='arch']")
             if arch is None:
