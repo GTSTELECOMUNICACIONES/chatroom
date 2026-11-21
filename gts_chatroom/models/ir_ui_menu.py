@@ -5,6 +5,7 @@ from odoo import models
 _logger = logging.getLogger(__name__)
 
 MENU_ESPERANDO = "gts_chatroom.menu_chatroom_esperando"
+MENU_RAIZ = "gts_chatroom.menu_chatroom_root"
 
 
 class IrUiMenu(models.Model):
@@ -22,6 +23,7 @@ class IrUiMenu(models.Model):
         `load_menus` esta en ormcache; este no, y construye diccionarios
         nuevos, asi que tocar el nombre aqui no ensucia la cache."""
         menus = super().load_web_menus(debug)
+        self._alma_version_en_el_menu(menus)
         menu = next(
             (m for m in menus.values() if m.get("xmlid") == MENU_ESPERANDO), None
         )
@@ -41,3 +43,26 @@ class IrUiMenu(models.Model):
         if total:
             menu["name"] = f"{menu['name']} ({total})"
         return menus
+
+    def _alma_version_en_el_menu(self, menus):
+        """La version, ARRIBA, en el nombre de la aplicacion: «ChatRoom ·
+        v0.3.3». Cuando un cliente llama con un problema, se le pregunta y la
+        ve sin entrar en Aplicaciones (David, 21-11-2026). Sale de la version
+        INSTALADA, no del fichero: es la que de verdad corre."""
+        raiz = next((m for m in menus.values() if m.get("xmlid") == MENU_RAIZ), None)
+        if not raiz:
+            return
+        try:
+            with self.env.cr.savepoint():
+                version = (
+                    self.env["ir.module.module"]
+                    .sudo()
+                    .search([("name", "=", "gts_chatroom")], limit=1)
+                    .latest_version
+                )
+        except Exception:
+            _logger.exception("ChatRoom: no se pudo leer la version")
+            return
+        if version:
+            corta = version.split(".", 2)[2] if version.count(".") >= 3 else version
+            raiz["name"] = f"{raiz['name']} · v{corta}"
