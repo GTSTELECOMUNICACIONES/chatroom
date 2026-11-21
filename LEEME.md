@@ -113,6 +113,12 @@ entrado. Se mira en Odoo, o en el log («could not be verified»).
   portal no contesta o dice que no, **la conversación no cambia en Odoo** y se
   enseña el motivo: la copia de Odoo nunca se adelanta al portal. Si lo acepta,
   queda una línea en la conversación («Ana atiende la conversación»).
+- **Aviso al entrar en espera (0.3.8)**: en el momento en que una conversación
+  pasa a «Esperando», un aviso emergente fijo («WhatsApp: alguien espera») a
+  los miembros de la pasarela (o al responsable si no hay). Es el
+  `simple_notification` del bus de Odoo: **sin JavaScript nuestro**. Sale una
+  vez al entrar, no con cada evento. Sin sonido. Solo lo ve quien tenga Odoo
+  abierto en ese momento; para lo demás está lo de abajo.
 - **Aviso cuando nadie la coge**: pasados N minutos en «Esperando» (5 por
   defecto; Ajustes → ChatRoom, con el responsable), una **actividad** al
   responsable —el administrador si no hay ninguno—. Es un registro que se
@@ -242,6 +248,10 @@ forma de la entrada y su bloque de estado. Con `truncado: true` (tope de 500)
 Odoo vuelve a pedir desde `hasta`, como mucho 10 vueltas; lo que quede, en la
 siguiente pasada.
 
+- **`mensaje.estado`** (Carlos, 21-11-2026): cada mensaje de `/desde` trae su
+  último estado (en_cola, salio, entregado, leido, fallido), **también los que
+  mandó Odoo**. Uno nuestro no se publica otra vez, pero su estado se aplica a
+  su notificación: una recuperación desatasca un envío cuyo acuse se perdió.
 - **No se reordena.** Dentro de una respuesta todos los eventos llevan el
   mismo `emitido_en` (el reloj del portal al emitirla) y ya vienen por fecha
   del mensaje: se procesan en el orden en que llegan. `emitido_en` solo decide

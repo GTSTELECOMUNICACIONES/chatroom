@@ -9,6 +9,8 @@ from unittest.mock import MagicMock, patch
 
 from odoo.tests import TransactionCase, tagged
 
+from odoo.addons.gts_chatroom.models.mail_gateway_alma import _fecha
+
 REQUEST = "odoo.addons.gts_chatroom.models.mail_gateway_alma.requests.request"
 NUMERO = "15555550100"
 TELEFONO = "15555550123"
@@ -147,3 +149,54 @@ class TestEco(TransactionCase):
         notificacion = mensaje.gateway_notification_ids
         self.assertEqual(notificacion.alma_motivo, "posible_bucle")
         self.assertIn("parece un bucle", notificacion.failure_reason)
+
+    def test_estado_de_desde_desatasca_un_envio(self):
+        """/desde devuelve nuestro mensaje con su ultimo `mensaje.estado`: no
+        se publica otra vez, pero su notificacion avanza."""
+        with patch(
+            REQUEST,
+            return_value=_respuesta(202, {"mensaje_id": "o-2", "estado": "en_cola"}),
+        ):
+            self.canal.message_post(body="Hola", message_type="comment")
+        antes = len(self._mensajes())
+        evento = self._evento_mensaje("o-2")
+        evento["mensaje"]["estado"] = "leido"
+        with patch(REQUEST) as peticion:
+            self.Alma._alma_procesar(self.gateway, evento)
+        peticion.assert_not_called()
+        self.assertEqual(len(self._mensajes()), antes)
+        notificacion = self.env["mail.notification"].search(
+            [("gateway_message_id", "=", "o-2")]
+        )
+        self.assertEqual(notificacion.alma_estado, "leido")
+
+
+@tagged("post_install", "-at_install")
+class TestAvisoEspera(TransactionCase):
+    @classmethod
+    def setUpClass(cls):
+        super().setUpClass()
+        cls.gateway = cls.env["mail.gateway"].create(
+            {
+                "name": "Alma de prueba aviso",
+                "token": "token-de-prueba-aviso",
+                "gateway_type": "alma",
+                "alma_url": "https://portal.invalid",
+                "alma_numero": NUMERO,
+                "member_ids": [(6, 0, [cls.env.ref("base.user_admin").id])],
+            }
+        )
+        cls.canal = cls.env["mail.gateway.alma"]._get_channel(
+            cls.gateway, TELEFONO, {"telefono": TELEFONO}, force_create=True
+        )
+
+    def test_avisa_solo_al_entrar_en_espera(self):
+        Usuarios = type(self.env["res.users"])
+        espera = {"relevo": "humano", "asignado_a": None, "espera": True}
+        with patch.object(Usuarios, "_bus_send") as aviso:
+            self.canal._alma_aplicar_estado(espera, _fecha("2026-11-21T22:00:00Z"))
+            self.assertEqual(aviso.call_count, 1)
+            self.assertEqual(aviso.call_args.args[0], "simple_notification")
+            # Otro evento que sigue en espera: no vuelve a avisar.
+            self.canal._alma_aplicar_estado(espera, _fecha("2026-11-21T22:01:00Z"))
+            self.assertEqual(aviso.call_count, 1)

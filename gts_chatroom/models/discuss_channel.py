@@ -179,6 +179,7 @@ class DiscussChannel(models.Model):
         if self.alma_cola == "esperando" and antes != "esperando":
             self.sudo().alma_esperando_desde = emitido_en
             self._alma_programar_aviso()
+            self._alma_avisar_al_entrar_en_espera()
         elif self.alma_cola != "esperando":
             self.sudo().alma_esperando_desde = False
             self._alma_cerrar_aviso()
@@ -333,6 +334,48 @@ class DiscussChannel(models.Model):
             for channel in self
         ]
         cron.sudo()._trigger(momentos)
+
+    def _alma_avisar_al_entrar_en_espera(self):
+        """Un aviso emergente a quien atiende, en el momento en que la
+        conversacion ENTRA en espera (no en cada evento: eso lo decide quien
+        llama). Peticion de David, 21-11-2026: tomo el control y no tuvo
+        ninguna senal de que alguien esperaba.
+
+        SIN JAVASCRIPT NUESTRO: `simple_notification` es del bus de Odoo
+        (`bus/static/src/simple_notification_service.js`), que lo pinta con
+        el servicio de notificaciones. Un fallo en un componente propio de la
+        barra superior ya dejo el backend en blanco una vez. El bus envia al
+        hacer commit, asi que un reintento por concurrencia no avisa dos
+        veces. Sin sonido: Odoo no lo trae para esto sin JS.
+
+        Lo que ya habia se queda: la actividad a los N minutos y el contador
+        del menu."""
+        self.ensure_one()
+        usuarios = self.sudo().gateway_id.member_ids.filtered("active")
+        if not usuarios:
+            usuarios = self._alma_responsable()
+        if not usuarios:
+            return
+        motivo = self.alma_motivo_relevo
+        mensaje = (
+            self.env._(
+                "%(nombre)s espera a una persona: %(motivo)s",
+                nombre=self.name,
+                motivo=motivo,
+            )
+            if motivo
+            else self.env._("%(nombre)s espera a una persona.", nombre=self.name)
+        )
+        for usuario in usuarios:
+            usuario._bus_send(
+                "simple_notification",
+                {
+                    "type": "warning",
+                    "title": self.env._("WhatsApp: alguien espera"),
+                    "message": mensaje,
+                    "sticky": True,
+                },
+            )
 
     def _alma_cerrar_aviso(self):
         for channel in self.filtered("alma_actividad_id"):

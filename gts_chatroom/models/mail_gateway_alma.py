@@ -205,6 +205,12 @@ class MailGatewayAlma(models.AbstractModel):
         if evento["estado"]:
             canal._alma_aplicar_estado(evento["estado"], evento["emitido_en"])
         alma_id = mensaje.get("id") and str(mensaje["id"])
+        if alma_id and mensaje.get("estado"):
+            # /desde trae en cada mensaje su ultimo estado (Carlos, 21-11-2026),
+            # tambien en los NUESTROS: se aplica a su notificacion aunque el
+            # mensaje no se publique. Asi una recuperacion desatasca un envio
+            # que se quedo en «en_cola» porque se perdio su acuse.
+            self._alma_avanzar_envio(gateway, alma_id, mensaje["estado"])
         if alma_id and self._alma_ya_esta(gateway, canal, alma_id):
             return
         body = Markup()
@@ -413,6 +419,25 @@ class MailGatewayAlma(models.AbstractModel):
         # OJO: casar por el id QUE DEVOLVIO EL PORTAL al enviar, no por el de
         # Gupshup ni por el de Meta. Casar por el que no es no da ningun error:
         # ningun acuse encuentra su mensaje y todo se queda en «salio».
+        notificaciones = self._alma_avanzar_envio(
+            gateway,
+            mensaje_id,
+            acuse.get("estado"),
+            acuse.get("alma_motivo"),
+            acuse.get("detalle"),
+            acuse.get("error"),
+        )
+        if evento["estado"] and notificaciones:
+            notificaciones.gateway_channel_id[:1]._alma_aplicar_estado(
+                evento["estado"], evento["emitido_en"]
+            )
+
+    def _alma_avanzar_envio(
+        self, gateway, mensaje_id, estado, motivo=False, detalle=False, frase=False
+    ):
+        """Mueve el estado de lo que mando Odoo con ese id del portal (el del
+        202). Lo usan el acuse y el `mensaje.estado` de /desde. Devuelve las
+        notificaciones encontradas, se hayan movido o no."""
         notificaciones = (
             self.env["mail.notification"]
             .sudo()
@@ -423,18 +448,10 @@ class MailGatewayAlma(models.AbstractModel):
                 ]
             )
         )
-        cambiadas = notificaciones._alma_avanzar(
-            acuse.get("estado"),
-            acuse.get("alma_motivo"),
-            acuse.get("detalle"),
-            acuse.get("error"),
-        )
+        cambiadas = notificaciones._alma_avanzar(estado, motivo, detalle, frase)
         for mensaje in cambiadas.mail_message_id:
             mensaje._notify_message_notification_update()
-        if evento["estado"] and notificaciones:
-            notificaciones.gateway_channel_id[:1]._alma_aplicar_estado(
-                evento["estado"], evento["emitido_en"]
-            )
+        return notificaciones
 
     # ------------------------------------------------------------------
     # Salida
