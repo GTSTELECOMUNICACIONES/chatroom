@@ -578,7 +578,7 @@ class MailGatewayAlma(models.AbstractModel):
         return datos, None
 
     def _alma_texto_error_relevo(self, respuesta, datos, cuerpo):
-        """⚠ LA FORMA DE ESTE ERROR NO ESTA CERRADA con el portal.
+        """El error de un cambio de relevo, en castellano para quien pulsa.
 
         Lo que se sabe (Carlos, 21-11-2026): si se pide «humano» con un
         `asignado_a` que no es miembro de esa cuenta en el portal, el error
@@ -586,6 +586,17 @@ class MailGatewayAlma(models.AbstractModel):
         todos los operadores, asi que tiene que leerse claro. El correo se
         busca en `detalle` y en `alma_motivo`; si no aparece, se ensena el
         error tal cual."""
+        # Confirmado por Carlos (21-11-2026): 409 con alma_motivo
+        # «operador_no_es_miembro», el correo SOLO en `detalle` y el estado.
+        # El relevo SE HACE (humano, sin dueno): rechazarlo dejaria a la IA
+        # contestando por encima de quien ya esta escribiendo.
+        if datos.get("alma_motivo") == "operador_no_es_miembro":
+            return self.env._(
+                "%(correo)s no está dado de alta en el portal de Alma. La "
+                "conversación ha pasado a atención de una persona, pero sin "
+                "asignar a nadie. Pide que te den de alta en el portal.",
+                correo=datos.get("detalle") or self.env._("Tu correo"),
+            )
         if respuesta.status_code != 401 and cuerpo.get("relevo") == "humano":
             for campo in ("detalle", "alma_motivo"):
                 texto = datos.get(campo)

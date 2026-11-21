@@ -219,7 +219,8 @@ los botones de la cola darán error (a la vista, y sin cambiar nada).
   resultante (también con error, y Odoo lo copia), la clave de idempotencia,
   `mensaje.cuando` y que el estado de `/desde` es el actual. «Resuelta» con el
   último mensaje del cliente se AVISA, no se impide (los dos lados igual).
-  Queda ⚠ la forma exacta del error del operador no dado de alta.
+  Operador no dado de alta: 409 `operador_no_es_miembro`, el correo solo en
+  `detalle`, y el relevo SE HACE (humano, sin asignar) con su estado.
 - Aviso que se ve y suena: la pestaña parpadeando hasta que alguien la coge y
   el sonido **solo cuando el contador sube**. Es JavaScript y va con cuidado
   (un fallo en la barra superior deja el backend en blanco).
