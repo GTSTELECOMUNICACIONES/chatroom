@@ -13,6 +13,15 @@
         action="discuss_channel_alma_action"
         sequence="10"
     />
+    <!-- El nombre lleva el numero de las que esperan: lo pone
+         models/ir_ui_menu.py al cargar los menus. -->
+    <menuitem
+        id="menu_chatroom_esperando"
+        name="Esperando"
+        parent="menu_chatroom_root"
+        action="discuss_channel_alma_esperando_action"
+        sequence="20"
+    />
     <menuitem
         id="menu_chatroom_config"
         name="Configuración"
@@ -26,5 +35,12 @@
         parent="menu_chatroom_config"
         action="mail_gateway_alma_action"
         sequence="10"
+    />
+    <menuitem
+        id="menu_chatroom_ajustes"
+        name="Ajustes"
+        parent="menu_chatroom_config"
+        action="gts_chatroom_config_settings_action"
+        sequence="20"
     />
 </odoo>

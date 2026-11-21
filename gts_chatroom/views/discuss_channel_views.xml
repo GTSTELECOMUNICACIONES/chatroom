@@ -1,7 +1,77 @@
 <?xml version="1.0" encoding="utf-8" ?>
 <odoo>
-    <!-- La pantalla basica: la cola. La conversacion se abre en Discuss, que
-         es donde la mete la pasarela; no se reconstruye la bandeja. -->
+    <!-- La cola. La conversacion se abre en Discuss, que es donde la mete la
+         pasarela; aqui solo se ve quien espera y se reparte. -->
+    <record id="discuss_channel_alma_kanban" model="ir.ui.view">
+        <field name="name">discuss.channel.kanban (gts_chatroom)</field>
+        <field name="model">discuss.channel</field>
+        <field name="priority">50</field>
+        <field name="arch" type="xml">
+            <!-- La cola es calculada: arrastrar una tarjeta de columna no puede
+                 cambiarla. Se cambia con los botones, que avisan al portal. -->
+            <kanban
+                create="0"
+                delete="0"
+                quick_create="0"
+                group_create="0"
+                group_delete="0"
+                group_edit="0"
+                groups_draggable="0"
+                records_draggable="0"
+                archivable="0"
+                default_group_by="alma_cola"
+                default_order="alma_esperando_desde, alma_ultimo_mensaje desc"
+                action="action_alma_abrir"
+                type="object"
+            >
+                <field name="alma_cola" />
+                <field name="alma_es_mia" />
+                <field name="alma_conversacion_id" />
+                <templates>
+                    <t t-name="card">
+                        <field name="name" class="fw-bold fs-5" />
+                        <field name="gateway_channel_token" class="text-muted" />
+                        <field
+                            name="alma_motivo_relevo"
+                            invisible="not alma_motivo_relevo"
+                        />
+                        <div invisible="not alma_esperando_desde">
+                            <i class="fa fa-clock-o me-1" title="Esperando desde" />
+                            <field name="alma_esperando_desde" />
+                        </div>
+                        <div invisible="not alma_asignado_a">
+                            <i class="fa fa-user me-1" title="La atiende" />
+                            <field name="alma_asignado_a" />
+                        </div>
+                        <footer>
+                            <button
+                                type="object"
+                                name="action_alma_atender"
+                                string="Atender"
+                                class="btn btn-primary btn-sm"
+                                invisible="alma_es_mia"
+                            />
+                            <button
+                                type="object"
+                                name="action_alma_devolver_ia"
+                                string="Devolver a la IA"
+                                class="btn btn-secondary btn-sm"
+                                invisible="alma_cola not in ('esperando', 'contestada', 'asignada')"
+                            />
+                            <button
+                                type="object"
+                                name="action_alma_resolver"
+                                string="Resuelta"
+                                class="btn btn-secondary btn-sm"
+                                invisible="alma_cola == 'resuelta'"
+                            />
+                        </footer>
+                    </t>
+                </templates>
+            </kanban>
+        </field>
+    </record>
+
     <record id="discuss_channel_alma_list" model="ir.ui.view">
         <field name="name">discuss.channel.list (gts_chatroom)</field>
         <field name="model">discuss.channel</field>
@@ -10,6 +80,7 @@
             <list
                 create="0"
                 delete="0"
+                default_order="alma_esperando_desde, alma_ultimo_mensaje desc"
                 decoration-danger="alma_cola == 'esperando'"
                 decoration-warning="alma_cola == 'contestada'"
                 decoration-muted="alma_cola == 'resuelta'"
@@ -21,11 +92,33 @@
                 <field name="alma_asignado_a" optional="show" />
                 <field name="alma_esperando_desde" optional="show" />
                 <field name="alma_ultimo_mensaje" />
+                <field name="alma_es_mia" column_invisible="1" />
                 <button
                     type="object"
                     name="action_alma_abrir"
                     string="Abrir"
                     icon="fa-comments"
+                />
+                <button
+                    type="object"
+                    name="action_alma_atender"
+                    string="Atender"
+                    icon="fa-hand-paper-o"
+                    invisible="alma_es_mia"
+                />
+                <button
+                    type="object"
+                    name="action_alma_devolver_ia"
+                    string="Devolver a la IA"
+                    icon="fa-reply"
+                    invisible="alma_cola not in ('esperando', 'contestada', 'asignada')"
+                />
+                <button
+                    type="object"
+                    name="action_alma_resolver"
+                    string="Resuelta"
+                    icon="fa-check"
+                    invisible="alma_cola == 'resuelta'"
                 />
             </list>
         </field>
@@ -39,20 +132,21 @@
             <search>
                 <field name="name" string="Contacto" />
                 <field name="gateway_channel_token" string="Teléfono" />
+                <field name="alma_asignado_a" />
                 <filter
                     name="esperando"
                     string="Esperando"
                     domain="[('alma_cola', '=', 'esperando')]"
                 />
                 <filter
-                    name="asistiendo"
-                    string="Asistiendo"
-                    domain="[('alma_cola', '=', 'asignada')]"
-                />
-                <filter
                     name="contestada"
                     string="Contestadas sin asignar"
                     domain="[('alma_cola', '=', 'contestada')]"
+                />
+                <filter
+                    name="asistiendo"
+                    string="Asignadas"
+                    domain="[('alma_cola', '=', 'asignada')]"
                 />
                 <filter
                     name="ia"
@@ -61,11 +155,17 @@
                 />
                 <separator />
                 <filter
+                    name="mias"
+                    string="Las que atiendo yo"
+                    domain="[('alma_es_mia', '=', True)]"
+                />
+                <separator />
+                <filter
                     name="abiertas"
                     string="Abiertas"
                     domain="[('alma_cola', '!=', 'resuelta')]"
                 />
-                <filter name="por_relevo" string="Relevo" context="{'group_by': 'alma_cola'}" />
+                <filter name="por_relevo" string="Cola" context="{'group_by': 'alma_cola'}" />
             </search>
         </field>
     </record>
@@ -73,10 +173,51 @@
     <record id="discuss_channel_alma_action" model="ir.actions.act_window">
         <field name="name">Conversaciones</field>
         <field name="res_model">discuss.channel</field>
-        <field name="view_mode">list</field>
-        <field name="view_id" ref="discuss_channel_alma_list" />
+        <field name="view_mode">kanban,list</field>
         <field name="search_view_id" ref="discuss_channel_alma_search" />
         <field name="domain">[('alma_es', '=', True)]</field>
-        <field name="context">{'search_default_abiertas': 1}</field>
+        <field
+            name="context"
+        >{'search_default_abiertas': 1, 'search_default_por_relevo': 1}</field>
+    </record>
+    <record id="discuss_channel_alma_action_kanban" model="ir.actions.act_window.view">
+        <field name="sequence">1</field>
+        <field name="view_mode">kanban</field>
+        <field name="view_id" ref="discuss_channel_alma_kanban" />
+        <field name="act_window_id" ref="discuss_channel_alma_action" />
+    </record>
+    <record id="discuss_channel_alma_action_list" model="ir.actions.act_window.view">
+        <field name="sequence">2</field>
+        <field name="view_mode">list</field>
+        <field name="view_id" ref="discuss_channel_alma_list" />
+        <field name="act_window_id" ref="discuss_channel_alma_action" />
+    </record>
+
+    <!-- Solo las que esperan, la que mas lleva arriba. Su menu lleva el
+         contador (ver models/ir_ui_menu.py). -->
+    <record id="discuss_channel_alma_esperando_action" model="ir.actions.act_window">
+        <field name="name">Esperando</field>
+        <field name="res_model">discuss.channel</field>
+        <field name="view_mode">list,kanban</field>
+        <field name="search_view_id" ref="discuss_channel_alma_search" />
+        <field
+            name="domain"
+        >[('alma_es', '=', True), ('alma_cola', '=', 'esperando')]</field>
+        <field name="help" type="html">
+            <p class="o_view_nocontent_smiling_face">Nadie espera ahora mismo.</p>
+            <p>Aquí salen las conversaciones que han pedido una persona y que nadie ha cogido todavía.</p>
+        </field>
+    </record>
+    <record id="discuss_channel_alma_esperando_action_list" model="ir.actions.act_window.view">
+        <field name="sequence">1</field>
+        <field name="view_mode">list</field>
+        <field name="view_id" ref="discuss_channel_alma_list" />
+        <field name="act_window_id" ref="discuss_channel_alma_esperando_action" />
+    </record>
+    <record id="discuss_channel_alma_esperando_action_kanban" model="ir.actions.act_window.view">
+        <field name="sequence">2</field>
+        <field name="view_mode">kanban</field>
+        <field name="view_id" ref="discuss_channel_alma_kanban" />
+        <field name="act_window_id" ref="discuss_channel_alma_esperando_action" />
     </record>
 </odoo>

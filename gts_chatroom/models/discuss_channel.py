@@ -1,4 +1,10 @@
+import re
+from datetime import timedelta
+
+from markupsafe import Markup
+
 from odoo import api, fields, models
+from odoo.exceptions import UserError
 
 RELEVO = [
     ("ia", "La IA"),
@@ -12,13 +18,28 @@ RELEVO = [
 # movil antes de que nadie la coja- no cabia en cuatro valores y tuvo el
 # buzon mudo un dia entero (Carlos, 19-11-2026). Las cuatro ultimas
 # conversaciones archivadas en GTS Racing acabaron asi.
+#
+# EL ORDEN DE ESTA LISTA ES EL DE LA PANTALLA: con `group_expand` Odoo pinta
+# los grupos en el orden en que se definen (`fields_selection.py`,
+# `_default_group_expand`), asi que «Esperando» sale siempre arriba, tambien
+# cuando esta vacio. Cambiar el orden no toca los datos guardados.
 COLA = [
-    ("ia", "Con la IA"),
     ("esperando", "Esperando a una persona"),
-    ("asignada", "La atiende una persona"),
     ("contestada", "Contestada, sin asignar"),
+    ("asignada", "La atiende una persona"),
+    ("ia", "Con la IA"),
     ("resuelta", "Resuelta"),
 ]
+
+# Minutos en «esperando» antes de crear la actividad, si no hay ajuste.
+MINUTOS_AVISO = 5
+PARAM_MINUTOS = "gts_chatroom.minutos_aviso"
+PARAM_RESPONSABLE = "gts_chatroom.responsable_id"
+
+
+def _escapar_like(texto):
+    """`=ilike` trata `_` y `%` como comodines; un correo puede llevar `_`."""
+    return re.sub(r"([\\%_])", r"\\\1", texto or "")
 
 
 class DiscussChannel(models.Model):
@@ -41,7 +62,12 @@ class DiscussChannel(models.Model):
     alma_espera = fields.Boolean(string="Espera respuesta", readonly=True)
     alma_motivo_relevo = fields.Char(string="Motivo del relevo", readonly=True)
     alma_cola = fields.Selection(
-        COLA, string="Cola", compute="_compute_alma_cola", store=True, index=True
+        COLA,
+        string="Cola",
+        compute="_compute_alma_cola",
+        store=True,
+        index=True,
+        group_expand=True,
     )
     alma_estado_en = fields.Datetime(
         string="Estado a fecha de",
@@ -51,6 +77,22 @@ class DiscussChannel(models.Model):
     )
     alma_esperando_desde = fields.Datetime(string="Esperando desde", readonly=True)
     alma_ultimo_mensaje = fields.Datetime(string="Ultimo mensaje", readonly=True)
+    alma_es_mia = fields.Boolean(
+        string="La atiendo yo",
+        compute="_compute_alma_es_mia",
+        search="_search_alma_es_mia",
+    )
+    # EL AVISO ES UN REGISTRO, NO UNA NOTIFICACION: una notificacion que suena
+    # una vez se la pierde quien no estaba delante, que es justo a quien hay
+    # que avisar. Una por cada vez que entra en espera; se cierra sola al
+    # salir de «esperando».
+    alma_actividad_id = fields.Many2one(
+        "mail.activity",
+        string="Aviso de espera",
+        readonly=True,
+        copy=False,
+        ondelete="set null",
+    )
 
     @api.depends("gateway_id.gateway_type")
     def _compute_alma_es(self):
@@ -69,10 +111,45 @@ class DiscussChannel(models.Model):
             else:
                 channel.alma_cola = "contestada"
 
-    def _alma_aplicar_estado(self, estado, emitido_en):
+    @api.depends("alma_asignado_a")
+    @api.depends_context("uid")
+    def _compute_alma_es_mia(self):
+        correo = (self._alma_correo(self.env.user) or "").lower()
+        for channel in self:
+            channel.alma_es_mia = bool(
+                correo and (channel.alma_asignado_a or "").lower() == correo
+            )
+
+    def _search_alma_es_mia(self, operator, value):
+        if operator not in ("in", "not in"):
+            return NotImplemented
+        correo = _escapar_like(self._alma_correo(self.env.user))
+        if (True in value) == (operator == "in"):
+            return [("alma_asignado_a", "=ilike", correo)]
+        return [
+            "|",
+            ("alma_asignado_a", "=", False),
+            ("alma_asignado_a", "not =ilike", correo),
+        ]
+
+    @api.model
+    def _alma_correo(self, usuario):
+        """Como se identifica a una persona ante el portal: su correo, o el
+        usuario de entrada si no tiene. Es lo que viaja en `asignado_a`."""
+        return usuario.email or usuario.login
+
+    # ------------------------------------------------------------------
+    # La copia del estado
+    # ------------------------------------------------------------------
+
+    def _alma_aplicar_estado(self, estado, emitido_en, confirmado=False):
         """Copia las piezas del relevo que manda el portal, si no son mas
         viejas que las que ya hay. Se compara por `emitido_en`, el reloj del
-        portal al emitir, nunca por la fecha del mensaje."""
+        portal al emitir, nunca por la fecha del mensaje.
+
+        `confirmado`: el cambio lo acaba de aceptar el portal en una llamada
+        nuestra. Es lo mas nuevo que se sabe aunque los relojes no casen, asi
+        que no se descarta por viejo."""
         self.ensure_one()
         relevo = estado.get("relevo")
         espera = bool(estado.get("espera"))
@@ -82,7 +159,9 @@ class DiscussChannel(models.Model):
         if relevo not in dict(RELEVO):
             return
         if self.alma_estado_en and emitido_en < self.alma_estado_en:
-            return
+            if not confirmado:
+                return
+            emitido_en = self.alma_estado_en
         antes = self.alma_cola
         self.sudo().write(
             {
@@ -97,8 +176,227 @@ class DiscussChannel(models.Model):
         # mensaje: la cola se ordena por cuanto lleva esperando.
         if self.alma_cola == "esperando" and antes != "esperando":
             self.sudo().alma_esperando_desde = emitido_en
+            self._alma_programar_aviso()
         elif self.alma_cola != "esperando":
             self.sudo().alma_esperando_desde = False
+            self._alma_cerrar_aviso()
+
+    # ------------------------------------------------------------------
+    # Los botones de la cola
+    # ------------------------------------------------------------------
+
+    def action_alma_atender(self):
+        """Me la quedo: relevo a una persona, asignada a mi."""
+        return self._alma_cambiar_relevo("humano")
+
+    def action_alma_devolver_ia(self):
+        return self._alma_cambiar_relevo("ia")
+
+    def action_alma_resolver(self):
+        return self._alma_cambiar_relevo("resuelta")
+
+    def _alma_cambiar_relevo(self, relevo):
+        """LA COPIA DE ODOO NUNCA SE ADELANTA AL PORTAL. Primero se le pide el
+        cambio al portal; solo si lo acepta se toca la conversacion aqui. Si
+        falla, el error sube como UserError, la transaccion se deshace y la
+        conversacion se queda como estaba."""
+        self.ensure_one()
+        if not self.alma_es:
+            raise UserError(self.env._("Esta conversación no es del portal de Alma."))
+        if not self.env.user.has_group("mail_gateway.gateway_user"):
+            raise UserError(
+                self.env._("No tiene permiso para atender conversaciones de WhatsApp.")
+            )
+        self.check_access("read")
+        if relevo == "resuelta" and self._alma_ultimo_es_del_cliente():
+            # NUNCA SE ESCONDE UNA CONVERSACION CUYO ULTIMO MENSAJE ES DEL
+            # CLIENTE: treinta dias sin contestar ya es un fallo, y quitarla de
+            # la vista lo vuelve invisible.
+            raise UserError(
+                self.env._(
+                    "El último mensaje es del cliente y nadie le ha contestado. "
+                    "Contéstele antes de darla por resuelta, o devuélvala a la IA."
+                )
+            )
+        if not self.alma_conversacion_id:
+            raise UserError(
+                self.env._(
+                    "Esta conversación todavía no tiene su identificador del "
+                    "portal, así que no se le puede avisar. Espere al siguiente "
+                    "mensaje del cliente o pulse «Recuperar del portal» en la "
+                    "pasarela."
+                )
+            )
+        usuario = self.env.user
+        # La hora de ANTES de llamar: cualquier evento que el portal emita
+        # despues de aplicar el cambio sera mas nuevo y pisara a este.
+        antes_de_llamar = fields.Datetime.now()
+        Alma = self.env["mail.gateway.alma"]
+        datos = Alma._alma_relevo(self.sudo().gateway_id, self, relevo, usuario)
+        estado = datos.get("estado") if isinstance(datos.get("estado"), dict) else {}
+        if not estado:
+            # El portal no devolvio el estado: se pone el que se le pidio.
+            estado = {
+                "relevo": relevo,
+                "asignado_a": (
+                    self._alma_correo(usuario) if relevo == "humano" else None
+                ),
+                "espera": self.alma_espera if relevo == "humano" else False,
+                "motivo_relevo": (
+                    self.alma_motivo_relevo if relevo == "humano" else None
+                ),
+            }
+        emitido_en = antes_de_llamar
+        if datos.get("emitido_en"):
+            try:
+                emitido_en = Alma._alma_fecha(datos["emitido_en"])
+            except ValueError:
+                emitido_en = antes_de_llamar
+        self._alma_aplicar_estado(estado, emitido_en, confirmado=True)
+        if relevo == "humano":
+            texto = self.env._("%s atiende la conversación.", usuario.name)
+        elif relevo == "ia":
+            texto = self.env._("%s devuelve la conversación a la IA.", usuario.name)
+        else:
+            texto = self.env._("%s da la conversación por resuelta.", usuario.name)
+        # Una linea en la propia conversacion, para que se vea quien la cogio.
+        # Tipo «notification»: la pasarela de la OCA no manda esas al cliente.
+        self.sudo().with_context(no_gateway_notification=True).message_post(
+            body=Markup("<p>%s</p>") % texto,
+            author_id=usuario.partner_id.id,
+            message_type="notification",
+            subtype_xmlid="mail.mt_note",
+        )
+        if relevo == "humano":
+            return self.action_alma_abrir()
+        return {"type": "ir.actions.client", "tag": "soft_reload"}
+
+    def _alma_ultimo_es_del_cliente(self):
+        self.ensure_one()
+        ultimo = (
+            self.env["mail.message"]
+            .sudo()
+            .search(
+                [
+                    ("model", "=", "discuss.channel"),
+                    ("res_id", "=", self.id),
+                    ("message_type", "=", "comment"),
+                ],
+                order="date desc, id desc",
+                limit=1,
+            )
+        )
+        return ultimo.alma_origen == "contacto"
+
+    # ------------------------------------------------------------------
+    # El aviso cuando nadie la coge
+    # ------------------------------------------------------------------
+
+    @api.model
+    def _alma_minutos_aviso(self):
+        valor = (
+            self.env["ir.config_parameter"].sudo().get_param(PARAM_MINUTOS) or ""
+        ).strip()
+        try:
+            return max(1, int(valor))
+        except ValueError:
+            return MINUTOS_AVISO
+
+    def _alma_programar_aviso(self):
+        """Despierta el cron justo cuando toque, en vez de esperar a su vuelta
+        de cada cuarto de hora."""
+        cron = self.env.ref(
+            "gts_chatroom.ir_cron_alma_avisar_esperas", raise_if_not_found=False
+        )
+        if not cron:
+            return
+        minutos = timedelta(minutes=self._alma_minutos_aviso())
+        ahora = fields.Datetime.now()
+        momentos = [
+            max(ahora, (channel.alma_esperando_desde or ahora) + minutos)
+            for channel in self
+        ]
+        cron.sudo()._trigger(momentos)
+
+    def _alma_cerrar_aviso(self):
+        for channel in self.filtered("alma_actividad_id"):
+            actividad = channel.alma_actividad_id.sudo()
+            channel.sudo().alma_actividad_id = False
+            if actividad.exists() and actividad.active:
+                actividad.action_feedback(
+                    feedback=self.env._(
+                        "Ya no espera: %s.",
+                        dict(
+                            self._fields["alma_cola"]._description_selection(self.env)
+                        ).get(channel.alma_cola, ""),
+                    )
+                )
+
+    @api.model
+    def _alma_avisar_esperas(self):
+        """Cron: una actividad al responsable por cada conversacion que lleva
+        mas de N minutos esperando sin que nadie la coja."""
+        limite = fields.Datetime.now() - timedelta(minutes=self._alma_minutos_aviso())
+        canales = self.sudo().search(
+            [
+                ("alma_es", "=", True),
+                ("alma_cola", "=", "esperando"),
+                ("alma_actividad_id", "=", False),
+                ("alma_esperando_desde", "<=", limite),
+            ]
+        )
+        if not canales:
+            return
+        responsable = self._alma_responsable()
+        if not responsable:
+            return
+        tipo = self.env.ref("mail.mail_activity_data_todo", raise_if_not_found=False)
+        modelo_contacto = self.env["ir.model"]._get_id("res.partner")
+        for canal in canales:
+            contacto = canal._get_gateway_partner()
+            # La actividad va en el CONTACTO y no en el canal: crearla en un
+            # canal intenta suscribir al responsable como seguidor, y
+            # discuss.channel lo prohibe con un UserError
+            # (`discuss_channel.py`, `_message_subscribe`).
+            vals = {
+                "user_id": responsable.id,
+                "activity_type_id": tipo.id if tipo else False,
+                "summary": self.env._("WhatsApp: %s espera a una persona", canal.name),
+                "note": Markup(
+                    '<p>%s</p><p><a href="/odoo/action-mail.action_discuss'
+                    '?active_id=%s">%s</a></p>'
+                )
+                % (
+                    self.env._(
+                        "Lleva esperando desde %s y nadie la ha cogido todavía.",
+                        fields.Datetime.context_timestamp(
+                            self.with_context(tz=responsable.tz or "UTC"),
+                            canal.alma_esperando_desde,
+                        ).strftime("%d/%m/%Y %H:%M"),
+                    ),
+                    canal.id,
+                    self.env._("Abrir la conversación"),
+                ),
+                "date_deadline": fields.Date.context_today(self),
+            }
+            if contacto:
+                vals.update({"res_model_id": modelo_contacto, "res_id": contacto.id})
+            canal.alma_actividad_id = self.env["mail.activity"].sudo().create(vals)
+
+    @api.model
+    def _alma_responsable(self):
+        valor = self.env["ir.config_parameter"].sudo().get_param(PARAM_RESPONSABLE)
+        responsable = self.env["res.users"]
+        if valor:
+            try:
+                responsable = responsable.sudo().browse(int(valor)).exists()
+            except ValueError:
+                responsable = self.env["res.users"]
+        if not responsable or not responsable.active:
+            # Sin responsable puesto, el administrador: un aviso sin nadie a
+            # quien le duela no es un aviso.
+            responsable = self.env.ref("base.user_admin", raise_if_not_found=False)
+        return responsable if responsable and responsable.active else False
 
     def action_alma_abrir(self):
         self.ensure_one()

@@ -1,0 +1,26 @@
+<?xml version="1.0" encoding="utf-8" ?>
+<odoo noupdate="1">
+    <!-- Cada cuarto de hora como red: el aviso de verdad lo dispara la propia
+         conversacion al entrar en espera (`_trigger` a los N minutos). Un cron
+         de un minuto en cada base se nota. -->
+    <record id="ir_cron_alma_avisar_esperas" model="ir.cron">
+        <field name="name">ChatRoom: avisar de las conversaciones que esperan</field>
+        <field name="model_id" ref="mail.model_discuss_channel" />
+        <field name="state">code</field>
+        <field name="code">model._alma_avisar_esperas()</field>
+        <field name="interval_number">15</field>
+        <field name="interval_type">minutes</field>
+    </record>
+
+    <!-- El portal no reintenta el reenvio: lo que no llego por el webhook se
+         recoge aqui. Timeout de 10 s por peticion y sin reintentos, y una
+         pasarela rota no para a las demas. -->
+    <record id="ir_cron_alma_recuperar" model="ir.cron">
+        <field name="name">ChatRoom: recuperar del portal lo que no llegó</field>
+        <field name="model_id" ref="model_mail_gateway_alma" />
+        <field name="state">code</field>
+        <field name="code">model._alma_recuperar_todas()</field>
+        <field name="interval_number">5</field>
+        <field name="interval_type">minutes</field>
+    </record>
+</odoo>

@@ -4,6 +4,7 @@ EL CONTRATO, en tres flujos y ninguno en el camino critico del otro:
 
     portal -> Odoo   cada evento (mensaje, acuse), CON el estado del relevo
     Odoo -> portal   POST /api/odoo/enviar, lo que escribe una persona aqui
+    Odoo -> portal   POST /api/odoo/relevo, «la cojo yo» / «para la IA» / «resuelta»
     Odoo -> portal   GET  /api/odoo/desde, para recuperar lo que se perdio
 
 La forma exacta de cada evento esta en `_alma_leer_evento`, y SOLO ahi: si el
@@ -13,15 +14,19 @@ portal cambia un nombre, se toca una funcion y no todo el fichero.
 import hashlib
 import hmac
 import logging
+import re
 import time
+import uuid
 from datetime import UTC, datetime, timedelta
 
 import requests
 from markupsafe import Markup
 
-from odoo import models
+from odoo import api, models
 from odoo.http import request
 from odoo.tools import html2plaintext, plaintext2html
+
+from odoo.exceptions import UserError
 
 from odoo.addons.base.models.ir_mail_server import MailDeliveryException
 
@@ -35,6 +40,9 @@ TIMEOUT = 10
 # Un adjunto mas grande no se descarga: se deja una linea diciendolo. Un
 # fichero de 200 MB metido en la transaccion del webhook la tumba.
 MAX_ADJUNTO = 25 * 1024 * 1024
+# Vueltas de /desde con `truncado`: 10 x 500 eventos. Mas, en la siguiente
+# pasada del cron: un hilo de cron colgado es un recurso escaso perdido.
+MAX_VUELTAS = 10
 
 MOTIVOS = {
     "sin_saldo": "No queda saldo de WhatsApp en la cuenta. Hay que recargarla "
@@ -47,7 +55,14 @@ MOTIVOS = {
     # Este es NUESTRO y no puede sonar a culpa del cliente.
     "saldo_del_servicio": "Incidencia temporal del servicio de mensajeria. No "
     "es un problema de su cuenta: avise a soporte de GTS.",
+    # Textos de Carlos, 21-11-2026.
+    "numero_desconocido": "El número de WhatsApp configurado en la pasarela no "
+    "pertenece a la cuenta del portal de Alma. Revisa la configuración.",
 }
+
+# Un correo dentro de un texto de error. Admite letras con tilde: el ejemplo de
+# Carlos es «rubén@...».
+CORREO = re.compile(r"[^\s@<>\"'(),;:]+@[^\s@<>\"'(),;:]+\.[^\s@<>\"'(),;:.]+")
 
 
 def _digitos(numero):
@@ -136,21 +151,31 @@ class MailGatewayAlma(models.AbstractModel):
         {tipo, emitido_en, numero,
          conversacion: {id, contacto: {telefono, nombre}},
          mensaje: {id, de: contacto|ia|operador|movil|sistema, texto,
-                   adjuntos: [{nombre, mime, url o null}]},
+                   fecha (⚠ propuesta, opcional),
+                   adjuntos: [{nombre o null, mime, url o null}]},
          acuse: {mensaje_id, estado, alma_motivo, detalle},
          estado: {relevo: ia|humano|resuelta, asignado_a, espera,
                   motivo_relevo}}
         """
         conversacion = update.get("conversacion") or {}
         contacto = conversacion.get("contacto") or {}
+        mensaje = update.get("mensaje") or {}
+        emitido_en = _fecha(update.get("emitido_en"))
         return {
             "tipo": update.get("tipo"),
-            "emitido_en": _fecha(update.get("emitido_en")),
+            "emitido_en": emitido_en,
+            # ⚠ La fecha DEL MENSAJE. En /desde todos los eventos de una
+            # respuesta llevan el mismo `emitido_en` (la hora de la respuesta):
+            # sin esto, lo recuperado saldria en Discuss con la hora de la
+            # recuperacion. Si no viene, `emitido_en`, como hasta ahora.
+            "fecha_mensaje": (
+                _fecha(mensaje["fecha"]) if mensaje.get("fecha") else emitido_en
+            ),
             "numero": _digitos(update.get("numero")),
             "conversacion_id": conversacion.get("id") and str(conversacion["id"]),
             "telefono": _digitos(contacto.get("telefono")),
             "nombre": contacto.get("nombre"),
-            "mensaje": update.get("mensaje") or {},
+            "mensaje": mensaje,
             "acuse": update.get("acuse") or {},
             "estado": update.get("estado") or {},
         }
@@ -213,7 +238,7 @@ class MailGatewayAlma(models.AbstractModel):
                 body=body,
                 author_id=autor.id or False,
                 gateway_type="alma",
-                date=evento["emitido_en"],
+                date=evento["fecha_mensaje"],
                 subtype_xmlid="mail.mt_comment",
                 message_type="comment",
                 attachments=adjuntos,
@@ -231,7 +256,11 @@ class MailGatewayAlma(models.AbstractModel):
                 ),
             }
         )
-        canal.sudo().alma_ultimo_mensaje = evento["emitido_en"]
+        if (
+            not canal.alma_ultimo_mensaje
+            or evento["fecha_mensaje"] > canal.alma_ultimo_mensaje
+        ):
+            canal.sudo().alma_ultimo_mensaje = evento["fecha_mensaje"]
         self._post_process_message(nuevo, canal)
 
     def _alma_origen(self, mensaje):
@@ -253,17 +282,19 @@ class MailGatewayAlma(models.AbstractModel):
         return self._get_author(gateway, evento) or self.env["res.partner"]
 
     def _alma_que_es(self, adjunto):
+        # Sin la barra a proposito: /desde manda `mime: "image"` a secas, y el
+        # webhook `image/jpeg`. `nombre` puede llegar null.
         mime = adjunto.get("mime") or ""
         nombre = adjunto.get("nombre")
         tipo = (
             self.env._("una imagen")
-            if mime.startswith("image/")
+            if mime.startswith("image")
             else (
                 self.env._("un audio")
-                if mime.startswith("audio/")
+                if mime.startswith("audio")
                 else (
                     self.env._("un vídeo")
-                    if mime.startswith("video/")
+                    if mime.startswith("video")
                     else self.env._("un documento")
                 )
             )
@@ -329,7 +360,7 @@ class MailGatewayAlma(models.AbstractModel):
         if len(contenido) > MAX_ADJUNTO:
             return False
         info = {}
-        if (adjunto.get("mime") or "").startswith("audio/"):
+        if (adjunto.get("mime") or "").startswith("audio"):
             info["voice"] = True
         return (adjunto.get("nombre") or "adjunto", contenido, info)
 
@@ -373,17 +404,15 @@ class MailGatewayAlma(models.AbstractModel):
         url = gateway.alma_url.rstrip("/") + ruta
         cabeceras = kwargs.pop("headers", {})
         cabeceras["Authorization"] = f"Bearer {gateway.token}"
-        # UN SOLO REINTENTO, y solo si no hubo respuesta. Odoo no reintenta
-        # fallos de red, y aqui se puede porque la clave de idempotencia hace
-        # que el portal no lo mande dos veces.
-        for intento in range(2):
-            try:
-                return requests.request(
-                    metodo, url, headers=cabeceras, timeout=TIMEOUT, **kwargs
-                )
-            except (requests.ConnectionError, requests.Timeout):
-                if intento:
-                    raise
+        # SIN REINTENTOS AUTOMATICOS. Un POST no se reintenta solo: el portal
+        # todavia no se protege de duplicados (Carlos, 21-11-2026) y un
+        # timeout no dice si el mensaje salio; un envio fallido se queda en
+        # «fallido» a la vista y lo reenvia una persona. Un GET tampoco: el
+        # reintento de /desde es la siguiente pasada del cron, y un hilo de
+        # cron no puede quedarse 2 x TIMEOUT esperando.
+        return requests.request(
+            metodo, url, headers=cabeceras, timeout=TIMEOUT, **kwargs
+        )
 
     def _send(
         self,
@@ -427,14 +456,14 @@ class MailGatewayAlma(models.AbstractModel):
                         "alma_motivo": motivo or False,
                         "notification_status": "exception",
                         "failure_type": "unknown",
-                        "failure_reason": (
-                            self._alma_texto_motivo(motivo)
-                            if motivo
-                            else f"[{respuesta.status_code}] {respuesta.text[:300]}"
-                        ),
+                        "failure_reason": self._alma_texto_error(respuesta, datos),
                     }
                 )
             else:
+                # 202 {mensaje_id, estado} y, quiza, conversacion_id: puede no
+                # venir. Con `repetido: true` el portal devuelve lo de la
+                # primera vez sin volver a enviar; aqui se escribe lo mismo
+                # sobre lo mismo, asi que no se duplica nada.
                 vals = {
                     "gateway_message_id": datos.get("mensaje_id") or False,
                     "failure_reason": False,
@@ -477,30 +506,180 @@ class MailGatewayAlma(models.AbstractModel):
     def _alma_texto_motivo(self, motivo):
         return MOTIVOS.get(motivo) or motivo or self.env._("Error del portal.")
 
+    def _alma_texto_error(self, respuesta, datos):
+        """El texto para la persona de un error del portal, sea cual sea la
+        llamada."""
+        if respuesta.status_code == 401:
+            # Llega SECO, sin cuerpo util (Carlos, 21-11-2026): clave
+            # revocada, inexistente o ausente. Se reconoce por el codigo.
+            return self.env._(
+                "El portal de Alma no acepta la clave de esta pasarela. Revisa "
+                "la clave en la configuración."
+            )
+        motivo = datos.get("alma_motivo")
+        if motivo:
+            return self._alma_texto_motivo(motivo)
+        return f"[{respuesta.status_code}] {respuesta.text[:300]}"
+
+    def _alma_fecha(self, valor):
+        return _fecha(valor)
+
+    # ------------------------------------------------------------------
+    # El relevo: Odoo -> portal
+    # ------------------------------------------------------------------
+
+    def _alma_cuerpo_relevo(self, gateway, canal, relevo, usuario):
+        """EL CUERPO DE POST /api/odoo/relevo, en un solo sitio. Confirmado
+        por Carlos el 21-11-2026: si cambia un nombre, se toca aqui."""
+        return {
+            "numero": _digitos(gateway.alma_numero),
+            "conversacion_id": canal.alma_conversacion_id or None,
+            "relevo": relevo,
+            "asignado_a": canal._alma_correo(usuario) if relevo == "humano" else None,
+            "operador": usuario.name,
+        }
+
+    def _alma_relevo(self, gateway, canal, relevo, usuario):
+        """Pide el cambio de relevo al portal. Devuelve lo que conteste si lo
+        acepta; si no, UserError con el motivo y NADA cambia en Odoo."""
+        cuerpo = self._alma_cuerpo_relevo(gateway, canal, relevo, usuario)
+        dbuuid = self.env["ir.config_parameter"].sudo().get_param("database.uuid")
+        # Una clave por pulsacion. Dos pulsaciones son dos peticiones, pero el
+        # cambio es el mismo: pedir dos veces «la cojo yo» no hace dano.
+        clave = f"odoo-{dbuuid}-relevo-{canal.id}-{uuid.uuid4().hex}"
+        try:
+            respuesta = self._alma_peticion(
+                gateway,
+                "POST",
+                "/api/odoo/relevo",
+                headers={"Idempotency-Key": clave},
+                json=cuerpo,
+            )
+        except (requests.RequestException, MailDeliveryException) as error:
+            _logger.warning("ChatRoom: relevo de %s sin respuesta: %s", canal.id, error)
+            raise UserError(
+                self.env._(
+                    "No se ha podido hablar con el portal de Alma, así que la "
+                    "conversación sigue como estaba. Inténtelo de nuevo en un "
+                    "momento.\n\nDetalle: %s",
+                    error,
+                )
+            ) from error
+        datos = self._alma_json(respuesta)
+        if respuesta.status_code >= 400:
+            raise UserError(self._alma_texto_error_relevo(respuesta, datos, cuerpo))
+        return datos
+
+    def _alma_texto_error_relevo(self, respuesta, datos, cuerpo):
+        """⚠ LA FORMA DE ESTE ERROR NO ESTA CERRADA con el portal.
+
+        Lo que se sabe (Carlos, 21-11-2026): si se pide «humano» con un
+        `asignado_a` que no es miembro de esa cuenta en el portal, el error
+        lleva dentro el correo literal. Es lo que pasara el primer dia con
+        todos los operadores, asi que tiene que leerse claro. El correo se
+        busca en `detalle` y en `alma_motivo`; si no aparece, se ensena el
+        error tal cual."""
+        if respuesta.status_code != 401 and cuerpo.get("relevo") == "humano":
+            for campo in ("detalle", "alma_motivo"):
+                texto = datos.get(campo)
+                encontrado = isinstance(texto, str) and CORREO.search(texto)
+                if encontrado:
+                    return self.env._(
+                        "%(correo)s no está dado de alta en el portal de Alma. "
+                        "Pide que te den de alta y vuelve a intentarlo.",
+                        correo=encontrado.group(0),
+                    )
+        texto = self._alma_texto_error(respuesta, datos)
+        detalle = datos.get("detalle")
+        if detalle and detalle not in texto:
+            texto = f"{texto} {detalle}"
+        return self.env._(
+            "El portal de Alma no ha aceptado el cambio, así que la conversación "
+            "sigue como estaba.\n\n%s",
+            texto,
+        )
+
     # ------------------------------------------------------------------
     # Recuperar
     # ------------------------------------------------------------------
 
     def _alma_recuperar(self, gateway):
         """Pide al portal los eventos desde CINCO MINUTOS ANTES del ultimo
-        procesado. Los repetidos se descartan; un hueco no se ve nunca."""
+        procesado. Los repetidos se descartan por `mensaje.id`; un hueco no se
+        ve nunca.
+
+        La respuesta (Carlos, 21-11-2026) es
+        `{"eventos": [...], "truncado": bool, "hasta": "<ISO>"}`. Con
+        `truncado` (tope de 500) se vuelve a pedir desde `hasta`, hasta que
+        venga `false` o se acaben las vueltas.
+
+        NO SE REORDENA. Dentro de una respuesta todos los eventos llevan el
+        MISMO `emitido_en` (el reloj del portal al emitirla), asi que ordenar
+        por el no ordena nada; el portal ya los manda por fecha del mensaje.
+        `emitido_en` solo decide si un bloque de estado es mas nuevo que el
+        guardado."""
         desde = gateway.alma_ultimo_evento or (datetime.now() - timedelta(days=1))
         desde -= timedelta(minutes=5)
-        respuesta = self._alma_peticion(
-            gateway,
-            "GET",
-            "/api/odoo/desde",
-            params={
-                "numero": _digitos(gateway.alma_numero),
-                "desde": desde.replace(tzinfo=UTC).isoformat(),
-            },
-        )
-        respuesta.raise_for_status()
-        eventos = self._alma_json(respuesta).get("eventos") or []
-        # Ordenar por emitido_en, nunca por llegada.
-        eventos.sort(key=lambda e: _fecha(e.get("emitido_en")))
+        desde_iso = desde.replace(tzinfo=UTC).isoformat()
         procesados = 0
-        for evento in eventos:
-            if self._alma_procesar(gateway, evento):
-                procesados += 1
+        for _vuelta in range(MAX_VUELTAS):
+            respuesta = self._alma_peticion(
+                gateway,
+                "GET",
+                "/api/odoo/desde",
+                params={"numero": _digitos(gateway.alma_numero), "desde": desde_iso},
+            )
+            datos = self._alma_json(respuesta)
+            if respuesta.status_code >= 400:
+                raise UserError(self._alma_texto_error(respuesta, datos))
+            for evento in datos.get("eventos") or []:
+                if isinstance(evento, dict) and self._alma_procesar(gateway, evento):
+                    procesados += 1
+            hasta = datos.get("hasta")
+            if not datos.get("truncado") or not hasta or hasta == desde_iso:
+                break
+            desde_iso = hasta
+        else:
+            _logger.warning(
+                "ChatRoom: la pasarela %s sigue truncada tras %s vueltas; el "
+                "resto se pide en la siguiente recuperacion",
+                gateway.id,
+                MAX_VUELTAS,
+            )
         return procesados
+
+    @api.model
+    def _alma_recuperar_todas(self):
+        """Cron: /desde para cada pasarela alma integrada. El portal no
+        reintenta el reenvio (Carlos, 21-11-2026): lo que no llego por el
+        webhook se recoge aqui.
+
+        UNA PASARELA ROTA NO PARA LAS DEMAS: su error se registra y se sigue.
+        El savepoint deshace solo lo suyo; sin el, un error de base de datos
+        dejaria la transaccion abortada para todas las que vienen detras."""
+        pasarelas = (
+            self.env["mail.gateway"]
+            .sudo()
+            .search(
+                [
+                    ("gateway_type", "=", "alma"),
+                    ("integrated_webhook_state", "=", "integrated"),
+                    ("alma_url", "!=", False),
+                ]
+            )
+        )
+        for gateway in pasarelas:
+            try:
+                with self.env.cr.savepoint():
+                    alma = self.with_company(gateway.company_id or self.env.company)
+                    procesados = alma._alma_recuperar(gateway)
+                if procesados:
+                    _logger.info(
+                        "ChatRoom: %s eventos recuperados en la pasarela %s",
+                        procesados,
+                        gateway.id,
+                    )
+            except Exception:
+                _logger.exception(
+                    "ChatRoom: fallo al recuperar la pasarela %s", gateway.id
+                )
