@@ -7,6 +7,15 @@
         groups="mail_gateway.gateway_user"
         sequence="45"
     />
+    <!-- Lo primero al entrar: los chats, como en WhatsApp (David,
+         25-11-2026). Las listas de Conversaciones y Esperando siguen. -->
+    <menuitem
+        id="menu_chatroom_chats"
+        name="Chats"
+        parent="menu_chatroom_root"
+        action="action_chatroom_chats"
+        sequence="5"
+    />
     <menuitem
         id="menu_chatroom_conversaciones"
         name="Conversaciones"

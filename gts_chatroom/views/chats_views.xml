@@ -1,0 +1,10 @@
+<?xml version="1.0" encoding="utf-8" ?>
+<odoo>
+    <!-- La pantalla de conversaciones de Odoo dentro del ChatRoom, solo con
+         sus chats (static/src/discuss_chatroom.js). -->
+    <record id="action_chatroom_chats" model="ir.actions.client">
+        <field name="name">Chats</field>
+        <field name="tag">mail.action_discuss</field>
+        <field name="context">{'gts_chatroom': True}</field>
+    </record>
+</odoo>
