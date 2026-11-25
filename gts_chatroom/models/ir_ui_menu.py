@@ -24,6 +24,7 @@ class IrUiMenu(models.Model):
         nuevos, asi que tocar el nombre aqui no ensucia la cache."""
         menus = super().load_web_menus(debug)
         self._alma_version_en_el_menu(menus)
+        self._gts_contadores_de_bandejas(menus)
         menu = next(
             (m for m in menus.values() if m.get("xmlid") == MENU_ESPERANDO), None
         )
@@ -66,3 +67,29 @@ class IrUiMenu(models.Model):
         if version:
             corta = version.split(".", 2)[2] if version.count(".") >= 3 else version
             raiz["name"] = f"{raiz['name']} · v{corta}"
+
+    def _gts_contadores_de_bandejas(self, menus):
+        """«Sin atender (3)» en la bandeja de cada canal, y el total en el
+        título del canal. Mismas reglas que el de «Esperando»: si falla, los
+        menús salen sin número."""
+        try:
+            with self.env.cr.savepoint():
+                Gateway = self.env["mail.gateway"].sudo()
+                por_canal = Gateway._gts_esperando_por_canal()
+                canales = Gateway.search(
+                    [("gateway_type", "=", "alma"), ("bandeja_menu_id", "!=", False)]
+                )
+                for gateway in canales:
+                    total = por_canal.get(gateway.id)
+                    if not total:
+                        continue
+                    seccion = gateway.bandeja_menu_id
+                    sin_atender = seccion.child_id.filtered(lambda m: m.sequence == 10)[
+                        :1
+                    ]
+                    for menu in (seccion, sin_atender):
+                        datos = menus.get(menu.id)
+                        if datos:
+                            datos["name"] = f"{datos['name']} ({total})"
+        except Exception:
+            _logger.exception("ChatRoom: no se pudo contar las bandejas")

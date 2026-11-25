@@ -15,6 +15,13 @@
                 />
                 <button
                     type="object"
+                    name="action_comprobar_con_el_portal"
+                    string="Comprobar con el portal"
+                    icon="fa-check-circle"
+                    invisible="gateway_type != 'alma'"
+                />
+                <button
+                    type="object"
                     name="action_alma_regenerar_claves"
                     string="Regenerar claves"
                     icon="fa-key"
@@ -29,11 +36,14 @@
                     invisible="gateway_type != 'alma'"
                     required="gateway_type == 'alma'"
                 />
+                <field name="canal_tipo" invisible="gateway_type != 'alma'" required="gateway_type == 'alma'" />
                 <field
                     name="alma_numero"
                     invisible="gateway_type != 'alma'"
                     required="gateway_type == 'alma'"
                 />
+                <field name="canal_numero" invisible="gateway_type != 'alma'" />
+                <field name="canal_etiqueta" invisible="gateway_type != 'alma'" />
                 <field
                     name="alma_url_entrada"
                     widget="CopyClipboardChar"

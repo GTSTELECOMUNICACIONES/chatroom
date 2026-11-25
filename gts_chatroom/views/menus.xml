@@ -16,6 +16,15 @@
         action="action_chatroom_chats"
         sequence="5"
     />
+    <!-- Una bandeja por canal, como los buzones de Outlook. Las secciones
+         y sus vistas las crea el código al dar de alta un canal
+         (models/gts_chatroom_canal.py). -->
+    <menuitem
+        id="menu_chatroom_bandejas"
+        name="Bandejas"
+        parent="menu_chatroom_root"
+        sequence="7"
+    />
     <menuitem
         id="menu_chatroom_conversaciones"
         name="Conversaciones"

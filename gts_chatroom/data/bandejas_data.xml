@@ -1,0 +1,7 @@
+<?xml version="1.0" encoding="utf-8" ?>
+<odoo>
+    <!-- SIN noupdate: en cada actualización rehace las bandejas de los
+         canales que ya existían. Va DESPUÉS de menus.xml, que crea el menú
+         «Bandejas» del que cuelgan. -->
+    <function model="mail.gateway" name="_gts_sincronizar_todas_las_bandejas" />
+</odoo>

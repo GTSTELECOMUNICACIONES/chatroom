@@ -32,6 +32,10 @@
                     <t t-name="card">
                         <field name="name" class="fw-bold fs-5" />
                         <field name="gateway_channel_token" class="text-muted" />
+                        <div class="small text-muted">
+                            <i class="fa fa-inbox me-1" title="Canal" />
+                            <field name="gts_canal" />
+                        </div>
                         <field
                             name="alma_motivo_relevo"
                             invisible="not alma_motivo_relevo"
@@ -96,6 +100,7 @@
             >
                 <field name="name" string="Contacto" />
                 <field name="gateway_channel_token" string="Teléfono" />
+                <field name="gts_canal" optional="show" />
                 <field name="alma_cola" widget="badge" />
                 <field name="alma_ultimo_cliente" column_invisible="1" />
                 <field name="alma_motivo_relevo" optional="hide" />
@@ -184,6 +189,7 @@
                     domain="[('alma_cola', '!=', 'resuelta')]"
                 />
                 <filter name="por_relevo" string="Cola" context="{'group_by': 'alma_cola'}" />
+                <filter name="por_canal" string="Canal" context="{'group_by': 'gateway_id'}" />
             </search>
         </field>
     </record>
