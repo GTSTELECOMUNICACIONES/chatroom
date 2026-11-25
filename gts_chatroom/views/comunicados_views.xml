@@ -262,7 +262,6 @@
                             <field name="plantilla_id" options="{'no_create': True}" readonly="state != 'borrador'" />
                             <field name="categoria_texto" invisible="not plantilla_id" />
                             <field name="variables" invisible="not plantilla_id" />
-                            <field name="parametros" invisible="not variables" readonly="state != 'borrador'" placeholder="Un dato por línea" />
                         </group>
                         <group name="a_quien">
                             <field name="lista_ids" widget="many2many_tags" options="{'no_create': True}" readonly="state != 'borrador'" />
@@ -272,6 +271,18 @@
                             <field name="enviado_por_id" invisible="not enviado_por_id" />
                         </group>
                     </group>
+                    <!-- Una casilla por dato, con lo que lo rodea en la
+                         plantilla (David, 25-11-2026). -->
+                    <div invisible="not variables">
+                        <label for="dato_ids" string="Rellena los datos de la plantilla" class="fw-bold" />
+                        <field name="dato_ids" readonly="state != 'borrador'">
+                            <list editable="bottom" create="0" delete="0">
+                                <field name="posicion" readonly="1" width="60px" />
+                                <field name="pista" readonly="1" />
+                                <field name="valor" placeholder="Escribe aquí, en una sola línea" />
+                            </list>
+                        </field>
+                    </div>
                     <notebook>
                         <page name="previa" string="Así llegará">
                             <field name="vista_previa" readonly="1" />

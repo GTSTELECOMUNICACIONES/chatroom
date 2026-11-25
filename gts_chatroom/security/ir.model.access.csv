@@ -6,3 +6,4 @@ access_gts_chatroom_lista_anadir_user,gts.chatroom.lista.anadir usuario,model_gt
 access_gts_chatroom_comunicado_user,gts.chatroom.comunicado usuario,model_gts_chatroom_comunicado,mail_gateway.gateway_user,1,1,1,0
 access_gts_chatroom_comunicado_admin,gts.chatroom.comunicado admin,model_gts_chatroom_comunicado,base.group_system,1,1,1,1
 access_gts_chatroom_comunicado_destinatario_user,gts.chatroom.comunicado.destinatario usuario,model_gts_chatroom_comunicado_destinatario,mail_gateway.gateway_user,1,1,1,1
+access_gts_chatroom_comunicado_dato_user,gts.chatroom.comunicado.dato usuario,model_gts_chatroom_comunicado_dato,mail_gateway.gateway_user,1,1,1,1

@@ -35,6 +35,16 @@ POR_LOTE = 300
 # El lote valida cientos de contactos antes de contestar: mas que un mensaje.
 TIMEOUT_LOTE = 60
 
+
+def _recorte(texto, largo, final=False):
+    """Un trozo de frase por palabras enteras: el final o el principio."""
+    if len(texto) <= largo:
+        return texto
+    if final:
+        return "…" + texto[-largo:].split(" ", 1)[-1]
+    return texto[:largo].rsplit(" ", 1)[0] + "…"
+
+
 ESTADOS_DESTINATARIO = [
     ("pendiente", "Pendiente"),
     ("sin_telefono", "Sin teléfono válido"),
@@ -79,11 +89,16 @@ class GtsChatroomComunicado(models.Model):
     categoria_texto = fields.Char(related="plantilla_id.categoria_texto")
     es_marketing = fields.Boolean(compute="_compute_es_marketing")
     variables = fields.Integer(related="plantilla_id.variables_cuerpo")
-    parametros = fields.Text(
+    # UNA CASILLA POR DATO (David, 25-11-2026): un texto con «uno por línea»
+    # no era cómodo. Salen solas al elegir la plantilla, con la frase en la
+    # que va cada una. `parametros` queda solo para los borradores de antes.
+    dato_ids = fields.One2many(
+        "gts.chatroom.comunicado.dato",
+        "comunicado_id",
         "Datos de la plantilla",
-        help="Uno por línea, en orden: la primera línea es el {{1}}, la segunda "
-        "el {{2}}… WhatsApp no deja saltos de línea dentro de un dato.",
+        copy=True,
     )
+    parametros = fields.Text("Datos (versión anterior)")
     vista_previa = fields.Text("Así llegará", compute="_compute_vista_previa")
     lista_ids = fields.Many2many(
         "gts.chatroom.lista",
@@ -134,11 +149,25 @@ class GtsChatroomComunicado(models.Model):
 
     def _lista_parametros(self):
         self.ensure_one()
-        return [
-            linea.strip() for linea in (self.parametros or "").splitlines() if linea
-        ]
+        return [(d.valor or "").strip() for d in self.dato_ids.sorted("posicion")]
 
-    @api.depends("plantilla_id.cuerpo", "parametros")
+    def _datos_para(self, plantilla):
+        """Los comandos para dejar una casilla por dato de la plantilla,
+        guardando lo ya escrito en la misma posición."""
+        escritos = {d.posicion: d.valor for d in self.dato_ids}
+        comandos = [(5, 0, 0)]
+        for posicion in range(1, (plantilla.variables_cuerpo or 0) + 1):
+            comandos.append(
+                (0, 0, {"posicion": posicion, "valor": escritos.get(posicion) or ""})
+            )
+        return comandos
+
+    @api.onchange("plantilla_id")
+    def _onchange_plantilla_datos(self):
+        if len(self.dato_ids) != (self.plantilla_id.variables_cuerpo or 0):
+            self.dato_ids = self._datos_para(self.plantilla_id)
+
+    @api.depends("plantilla_id.cuerpo", "dato_ids.valor", "dato_ids.posicion")
     def _compute_vista_previa(self):
         for comunicado in self:
             texto = comunicado.plantilla_id.cuerpo or ""
@@ -166,26 +195,35 @@ class GtsChatroomComunicado(models.Model):
     @api.model_create_multi
     def create(self, vals_list):
         comunicados = super().create(vals_list)
+        comunicados._ajustar_datos()
         comunicados.accion_preparar()
         return comunicados
 
     def write(self, vals):
         res = super().write(vals)
+        if "plantilla_id" in vals:
+            self._ajustar_datos()
         if {"lista_ids", "partner_ids"} & set(vals):
             self.filtered(lambda c: c.state == "borrador").accion_preparar()
         return res
 
+    def _ajustar_datos(self):
+        """Por API o importación no hay onchange: las casillas se ajustan al
+        guardar."""
+        for comunicado in self.filtered(lambda c: c.state == "borrador"):
+            if len(comunicado.dato_ids) != (comunicado.variables or 0):
+                comunicado.dato_ids = comunicado._datos_para(comunicado.plantilla_id)
+
     def _comprobar_parametros(self):
         self.ensure_one()
         valores = self._lista_parametros()
-        if len(valores) != self.variables:
+        if len(valores) != self.variables or not all(valores):
             raise UserError(
                 self.env._(
-                    "La plantilla %(p)s necesita %(n)s datos, uno por línea, y "
-                    "hay %(h)s.",
+                    "La plantilla %(p)s necesita %(n)s datos y falta alguno por "
+                    "rellenar.",
                     p=self.plantilla_id.name,
                     n=self.variables,
-                    h=len(valores),
                 )
             )
         for valor in valores:
@@ -398,3 +436,57 @@ class GtsChatroomComunicadoDestinatario(models.Model):
                 if actual == "fallido":
                     continue
                 linea.estado = estado
+
+
+class GtsChatroomComunicadoDato(models.Model):
+    _name = "gts.chatroom.comunicado.dato"
+    _description = "Dato de la plantilla de un comunicado"
+    _order = "comunicado_id, posicion"
+
+    comunicado_id = fields.Many2one(
+        "gts.chatroom.comunicado",
+        "Comunicado",
+        required=True,
+        ondelete="cascade",
+        index=True,
+    )
+    posicion = fields.Integer("Dato", required=True)
+    pista = fields.Char("Dónde va", compute="_compute_pista")
+    valor = fields.Char("Texto")
+
+    @api.depends("posicion", "comunicado_id.plantilla_id.cuerpo")
+    def _compute_pista(self):
+        """Lo que rodea al dato en la plantilla, para saber qué escribir:
+        «…para este fin de semana: [1] … Apuntaos con tiempo…». Las líneas
+        que son solo otro dato se saltan: no dicen nada."""
+        solo_dato = re.compile(r"^\{\{\d+\}\}$")
+        for dato in self:
+            marca = f"{{{{{dato.posicion}}}}}"
+            lineas = [
+                linea.strip()
+                for linea in (dato.comunicado_id.plantilla_id.cuerpo or "").splitlines()
+                if linea.strip()
+            ]
+            pista = ""
+            for i, linea in enumerate(lineas):
+                if marca not in linea:
+                    continue
+                if not solo_dato.match(linea):
+                    pista = linea.replace(marca, f"[{dato.posicion}]")
+                    break
+                antes = next(
+                    (x for x in reversed(lineas[:i]) if not solo_dato.match(x)), ""
+                )
+                despues = next(
+                    (x for x in lineas[i + 1 :] if not solo_dato.match(x)), ""
+                )
+                orden = sum(1 for x in lineas[:i] if solo_dato.match(x)) + 1
+                pista = self.env._(
+                    "%(orden)sº bloque suelto después de «%(antes)s», antes de "
+                    "«%(despues)s»",
+                    orden=orden,
+                    antes=_recorte(antes, 60, final=True),
+                    despues=_recorte(despues, 45),
+                )
+                break
+            dato.pista = pista[:200]
