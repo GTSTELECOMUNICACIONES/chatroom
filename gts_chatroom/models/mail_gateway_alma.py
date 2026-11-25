@@ -451,6 +451,13 @@ class MailGatewayAlma(models.AbstractModel):
         cambiadas = notificaciones._alma_avanzar(estado, motivo, detalle, frase)
         for mensaje in cambiadas.mail_message_id:
             mensaje._notify_message_notification_update()
+        # Los de un comunicado no tienen notificacion: casan por el mismo id.
+        self.env["gts.chatroom.comunicado.destinatario"].sudo().search(
+            [
+                ("mensaje_id", "=", str(mensaje_id)),
+                ("comunicado_id.gateway_id", "=", gateway.id),
+            ]
+        )._alma_avanzar(estado, motivo, frase or detalle)
         return notificaciones
 
     # ------------------------------------------------------------------
@@ -476,11 +483,14 @@ class MailGatewayAlma(models.AbstractModel):
         # que no llega a su codigo contesta 307 a /login; requests la seguia
         # en el GET y la pagina de login, 200 en HTML, se leia como «ningun
         # evento» sin error. Una redireccion es siempre un fallo a la vista.
+        # El lote de un comunicado valida cientos de contactos antes de
+        # contestar: lo pide con su propio tiempo.
+        timeout = kwargs.pop("timeout", TIMEOUT)
         return requests.request(
             metodo,
             url,
             headers=cabeceras,
-            timeout=TIMEOUT,
+            timeout=timeout,
             allow_redirects=False,
             **kwargs,
         )

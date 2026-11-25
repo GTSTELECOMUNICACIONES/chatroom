@@ -23,6 +23,34 @@
         action="discuss_channel_alma_esperando_action"
         sequence="20"
     />
+    <!-- Comunicados y plantillas (David, 25-11-2026). -->
+    <menuitem
+        id="menu_chatroom_comunicados_raiz"
+        name="Comunicados"
+        parent="menu_chatroom_root"
+        sequence="30"
+    />
+    <menuitem
+        id="menu_chatroom_comunicados"
+        name="Comunicados"
+        parent="menu_chatroom_comunicados_raiz"
+        action="gts_chatroom_comunicado_action"
+        sequence="10"
+    />
+    <menuitem
+        id="menu_chatroom_listas"
+        name="Listas de difusión"
+        parent="menu_chatroom_comunicados_raiz"
+        action="gts_chatroom_lista_action"
+        sequence="20"
+    />
+    <menuitem
+        id="menu_chatroom_plantillas"
+        name="Plantillas"
+        parent="menu_chatroom_root"
+        action="gts_chatroom_plantilla_action"
+        sequence="40"
+    />
     <menuitem
         id="menu_chatroom_config"
         name="Configuración"

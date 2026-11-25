@@ -1,0 +1,8 @@
+id,name,model_id:id,group_id:id,perm_read,perm_write,perm_create,perm_unlink
+access_gts_chatroom_plantilla_user,gts.chatroom.plantilla usuario,model_gts_chatroom_plantilla,mail_gateway.gateway_user,1,1,1,0
+access_gts_chatroom_plantilla_admin,gts.chatroom.plantilla admin,model_gts_chatroom_plantilla,base.group_system,1,1,1,1
+access_gts_chatroom_lista_user,gts.chatroom.lista usuario,model_gts_chatroom_lista,mail_gateway.gateway_user,1,1,1,1
+access_gts_chatroom_lista_anadir_user,gts.chatroom.lista.anadir usuario,model_gts_chatroom_lista_anadir,mail_gateway.gateway_user,1,1,1,1
+access_gts_chatroom_comunicado_user,gts.chatroom.comunicado usuario,model_gts_chatroom_comunicado,mail_gateway.gateway_user,1,1,1,0
+access_gts_chatroom_comunicado_admin,gts.chatroom.comunicado admin,model_gts_chatroom_comunicado,base.group_system,1,1,1,1
+access_gts_chatroom_comunicado_destinatario_user,gts.chatroom.comunicado.destinatario usuario,model_gts_chatroom_comunicado_destinatario,mail_gateway.gateway_user,1,1,1,1

@@ -1,0 +1,269 @@
+<?xml version="1.0" encoding="utf-8" ?>
+<odoo>
+    <!-- ============ PLANTILLAS (copiadas del portal) ============ -->
+    <record id="gts_chatroom_plantilla_list" model="ir.ui.view">
+        <field name="name">gts.chatroom.plantilla.list</field>
+        <field name="model">gts.chatroom.plantilla</field>
+        <field name="arch" type="xml">
+            <list create="0" decoration-muted="not se_puede_enviar">
+                <header>
+                    <button name="accion_actualizar" type="object" string="Copiar del portal" icon="fa-refresh" class="btn-primary" display="always" />
+                </header>
+                <field name="name" />
+                <field name="categoria_texto" />
+                <field name="reclasificada" optional="hide" />
+                <field name="estado" widget="badge" decoration-success="estado == 'aprobada'" decoration-warning="estado in ('pendiente', 'en_revision')" decoration-danger="estado in ('rechazada', 'pausada', 'desactivada')" />
+                <field name="variables_cuerpo" />
+                <field name="idioma" optional="hide" />
+                <field name="se_puede_enviar" />
+                <field name="por_que_no" optional="show" />
+                <field name="gateway_id" optional="hide" />
+            </list>
+        </field>
+    </record>
+    <record id="gts_chatroom_plantilla_form" model="ir.ui.view">
+        <field name="name">gts.chatroom.plantilla.form</field>
+        <field name="model">gts.chatroom.plantilla</field>
+        <field name="arch" type="xml">
+            <form create="0" edit="0">
+                <sheet>
+                    <div class="alert alert-warning" role="alert" invisible="se_puede_enviar">
+                        <field name="por_que_no" readonly="1" />
+                    </div>
+                    <div class="alert alert-info" role="status" invisible="not reclasificada">
+                        Meta la ha reclasificado: se cobra y se trata como <field name="categoria_texto" class="fw-bold" readonly="1" />.
+                    </div>
+                    <h1><field name="name" readonly="1" /></h1>
+                    <group name="principal_1">
+                        <group name="meta">
+                            <field name="categoria_texto" />
+                            <field name="estado" />
+                            <field name="motivo" invisible="not motivo" />
+                            <field name="idioma" />
+                        </group>
+                        <group name="contenido">
+                            <field name="variables_cuerpo" />
+                            <field name="cabecera" invisible="not cabecera" />
+                            <field name="se_puede_enviar" invisible="1" />
+                            <field name="reclasificada" invisible="1" />
+                            <field name="gateway_id" />
+                        </group>
+                    </group>
+                    <field name="cuerpo" readonly="1" />
+                </sheet>
+            </form>
+        </field>
+    </record>
+    <record id="gts_chatroom_plantilla_search" model="ir.ui.view">
+        <field name="name">gts.chatroom.plantilla.search</field>
+        <field name="model">gts.chatroom.plantilla</field>
+        <field name="arch" type="xml">
+            <search>
+                <field name="name" />
+                <filter name="enviables" string="Se pueden enviar" domain="[('se_puede_enviar', '=', True)]" />
+                <filter name="marketing" string="Marketing" domain="[('categoria', '=', 'MARKETING')]" />
+                <filter name="utilidad" string="Utilidad" domain="[('categoria', '=', 'UTILITY')]" />
+                <separator />
+                <filter name="archivadas" string="Ya no están en el portal" domain="[('active', '=', False)]" />
+            </search>
+        </field>
+    </record>
+    <record id="gts_chatroom_plantilla_action" model="ir.actions.act_window">
+        <field name="name">Plantillas</field>
+        <field name="res_model">gts.chatroom.plantilla</field>
+        <field name="view_mode">list,form</field>
+        <field name="help" type="html">
+            <p class="o_view_nocontent_smiling_face">Aún no se han copiado las plantillas.</p>
+            <p>Pulsa «Copiar del portal»: se traen las de WhatsApp de la cuenta, con su estado en Meta.</p>
+        </field>
+    </record>
+
+    <!-- ============ LISTAS DE DIFUSIÓN ============ -->
+    <record id="gts_chatroom_lista_list" model="ir.ui.view">
+        <field name="name">gts.chatroom.lista.list</field>
+        <field name="model">gts.chatroom.lista</field>
+        <field name="arch" type="xml">
+            <list>
+                <field name="name" />
+                <field name="contactos" />
+                <field name="sin_telefono" decoration-warning="sin_telefono" />
+                <field name="nota" optional="show" />
+            </list>
+        </field>
+    </record>
+    <record id="gts_chatroom_lista_form" model="ir.ui.view">
+        <field name="name">gts.chatroom.lista.form</field>
+        <field name="model">gts.chatroom.lista</field>
+        <field name="arch" type="xml">
+            <form>
+                <sheet>
+                    <div class="oe_button_box" name="button_box">
+                        <button name="accion_ver_sin_telefono" type="object" class="oe_stat_button" icon="fa-phone" invisible="not sin_telefono">
+                            <field name="sin_telefono" widget="statinfo" string="Sin teléfono" />
+                        </button>
+                    </div>
+                    <widget name="web_ribbon" title="Archivada" bg_color="text-bg-danger" invisible="active" />
+                    <field name="active" invisible="1" />
+                    <h1><field name="name" placeholder="Alumnos de N2" /></h1>
+                    <field name="nota" placeholder="Para qué es esta lista" />
+                    <field name="partner_ids">
+                        <list>
+                            <field name="name" />
+                            <field name="phone" />
+                            <field name="phone_sanitized" optional="hide" />
+                            <field name="email" optional="show" />
+                        </list>
+                    </field>
+                </sheet>
+            </form>
+        </field>
+    </record>
+    <record id="gts_chatroom_lista_action" model="ir.actions.act_window">
+        <field name="name">Listas de difusión</field>
+        <field name="res_model">gts.chatroom.lista</field>
+        <field name="view_mode">list,form</field>
+        <field name="help" type="html">
+            <p class="o_view_nocontent_smiling_face">Crea la primera lista.</p>
+            <p>Una lista es un grupo de contactos al que mandar un comunicado: «Alumnos de N2», «Team»… También se llena desde Contactos o desde las matrículas de la escuela, con «Añadir a una lista de difusión».</p>
+        </field>
+    </record>
+
+    <record id="gts_chatroom_lista_anadir_form" model="ir.ui.view">
+        <field name="name">gts.chatroom.lista.anadir.form</field>
+        <field name="model">gts.chatroom.lista.anadir</field>
+        <field name="arch" type="xml">
+            <form>
+                <group name="principal_2">
+                    <field name="lista_id" options="{'no_create': True}" />
+                    <field name="nombre_nueva" invisible="lista_id" placeholder="Alumnos de N2" />
+                    <field name="vaciar" invisible="not lista_id" />
+                </group>
+                <field name="partner_ids">
+                    <list>
+                        <field name="name" />
+                        <field name="phone" />
+                    </list>
+                </field>
+                <footer>
+                    <button name="accion_anadir" type="object" string="Añadir" class="btn-primary" />
+                    <button string="Cancelar" special="cancel" />
+                </footer>
+            </form>
+        </field>
+    </record>
+    <record id="action_lista_anadir" model="ir.actions.act_window">
+        <field name="name">Añadir a una lista de difusión</field>
+        <field name="res_model">gts.chatroom.lista.anadir</field>
+        <field name="view_mode">form</field>
+        <field name="target">new</field>
+        <field name="binding_model_id" ref="base.model_res_partner" />
+        <field name="binding_view_types">list</field>
+    </record>
+
+    <!-- ============ COMUNICADOS ============ -->
+    <record id="gts_chatroom_comunicado_list" model="ir.ui.view">
+        <field name="name">gts.chatroom.comunicado.list</field>
+        <field name="model">gts.chatroom.comunicado</field>
+        <field name="arch" type="xml">
+            <list decoration-muted="state == 'borrador'" decoration-danger="state == 'error'">
+                <field name="name" />
+                <field name="plantilla_id" />
+                <field name="lista_ids" widget="many2many_tags" />
+                <field name="enviado_el" />
+                <field name="total" />
+                <field name="aceptados" />
+                <field name="rechazados" />
+                <field name="entregados" />
+                <field name="leidos" />
+                <field name="state" widget="badge" decoration-success="state == 'enviado'" decoration-info="state == 'enviando'" decoration-danger="state == 'error'" />
+            </list>
+        </field>
+    </record>
+    <record id="gts_chatroom_comunicado_form" model="ir.ui.view">
+        <field name="name">gts.chatroom.comunicado.form</field>
+        <field name="model">gts.chatroom.comunicado</field>
+        <field name="arch" type="xml">
+            <form>
+                <header>
+                    <button name="accion_preparar" type="object" string="Ver destinatarios" invisible="state != 'borrador'" />
+                    <button name="accion_enviar" type="object" string="Enviar" class="btn-primary" invisible="state != 'borrador'" confirm="Se va a mandar el comunicado a todos los destinatarios. Cada mensaje se paga y no se puede retirar. ¿Enviar?" />
+                    <button name="accion_volver_a_borrador" type="object" string="Volver a borrador" invisible="state != 'error'" />
+                    <field name="state" widget="statusbar" statusbar_visible="borrador,enviando,enviado" />
+                </header>
+                <sheet>
+                    <div class="alert alert-danger" role="alert" invisible="state != 'error'">
+                        <field name="error" readonly="1" />
+                    </div>
+                    <div class="alert alert-info" role="status" invisible="state != 'enviando'">
+                        Enviándose. Recarga en unos segundos para ver cuántos ha aceptado el portal.
+                    </div>
+                    <div class="alert alert-warning" role="status" invisible="not es_marketing or state != 'borrador'">
+                        Es una plantilla de <b>marketing</b>: no les llegará a quienes se dieron de baja de publicidad. Lo comprueba el portal al enviar y salen como «Rechazado».
+                    </div>
+                    <field name="es_marketing" invisible="1" />
+                    <div class="oe_button_box" name="button_box">
+                        <div class="oe_stat_button">
+                            <field name="total" widget="statinfo" string="Destinatarios" />
+                        </div>
+                        <div class="oe_stat_button" invisible="state == 'borrador'">
+                            <field name="aceptados" widget="statinfo" string="Aceptados" />
+                        </div>
+                        <div class="oe_stat_button" invisible="not rechazados">
+                            <field name="rechazados" widget="statinfo" string="Rechazados" />
+                        </div>
+                        <div class="oe_stat_button" invisible="state == 'borrador'">
+                            <field name="entregados" widget="statinfo" string="Entregados" />
+                        </div>
+                        <div class="oe_stat_button" invisible="state == 'borrador'">
+                            <field name="leidos" widget="statinfo" string="Leídos" />
+                        </div>
+                        <div class="oe_stat_button" invisible="not fallidos">
+                            <field name="fallidos" widget="statinfo" string="Fallidos" />
+                        </div>
+                    </div>
+                    <h1><field name="name" placeholder="Clases de este fin de semana" readonly="state != 'borrador'" /></h1>
+                    <group name="principal_3">
+                        <group name="que">
+                            <field name="plantilla_id" options="{'no_create': True}" readonly="state != 'borrador'" />
+                            <field name="categoria_texto" invisible="not plantilla_id" />
+                            <field name="variables" invisible="not plantilla_id" />
+                            <field name="parametros" invisible="not variables" readonly="state != 'borrador'" placeholder="Un dato por línea" />
+                        </group>
+                        <group name="a_quien">
+                            <field name="lista_ids" widget="many2many_tags" options="{'no_create': True}" readonly="state != 'borrador'" />
+                            <field name="partner_ids" widget="many2many_tags" readonly="state != 'borrador'" />
+                            <field name="gateway_id" groups="base.group_system" readonly="state != 'borrador'" />
+                            <field name="enviado_el" invisible="not enviado_el" />
+                            <field name="enviado_por_id" invisible="not enviado_por_id" />
+                        </group>
+                    </group>
+                    <notebook>
+                        <page name="previa" string="Así llegará">
+                            <field name="vista_previa" readonly="1" />
+                        </page>
+                        <page name="destinatarios" string="Destinatarios">
+                            <field name="destinatario_ids" readonly="1">
+                                <list decoration-danger="estado in ('rechazado', 'fallido', 'sin_telefono')" decoration-success="estado in ('entregado', 'leido')">
+                                    <field name="partner_id" />
+                                    <field name="telefono" />
+                                    <field name="estado" widget="badge" />
+                                    <field name="motivo_texto" />
+                                </list>
+                            </field>
+                        </page>
+                    </notebook>
+                </sheet>
+                <chatter />
+            </form>
+        </field>
+    </record>
+    <record id="gts_chatroom_comunicado_action" model="ir.actions.act_window">
+        <field name="name">Comunicados</field>
+        <field name="res_model">gts.chatroom.comunicado</field>
+        <field name="view_mode">list,form</field>
+        <field name="help" type="html">
+            <p class="o_view_nocontent_smiling_face">Manda el primer comunicado.</p>
+            <p>Elige una plantilla aprobada y una o varias listas. Antes de enviar ves el texto final y a quién le llega.</p>
+        </field>
+    </record>
+</odoo>

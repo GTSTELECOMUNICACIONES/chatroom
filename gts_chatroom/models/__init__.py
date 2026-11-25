@@ -5,3 +5,6 @@ from . import mail_gateway_alma
 from . import mail_message
 from . import mail_notification
 from . import res_config_settings
+from . import gts_chatroom_plantilla
+from . import gts_chatroom_lista
+from . import gts_chatroom_comunicado
