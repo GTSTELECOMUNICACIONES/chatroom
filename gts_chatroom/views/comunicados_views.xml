@@ -298,6 +298,8 @@
                                     <field name="telefono" />
                                     <field name="estado" widget="badge" />
                                     <field name="motivo_texto" />
+                                    <field name="reclasificado" column_invisible="1" />
+                                    <field name="cobrado_texto" optional="show" decoration-warning="reclasificado" />
                                 </list>
                             </field>
                         </page>

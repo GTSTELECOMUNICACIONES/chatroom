@@ -426,6 +426,7 @@ class MailGatewayAlma(models.AbstractModel):
             acuse.get("alma_motivo"),
             acuse.get("detalle"),
             acuse.get("error"),
+            pricing=acuse.get("pricing"),
         )
         if evento["estado"] and notificaciones:
             notificaciones.gateway_channel_id[:1]._alma_aplicar_estado(
@@ -433,7 +434,14 @@ class MailGatewayAlma(models.AbstractModel):
             )
 
     def _alma_avanzar_envio(
-        self, gateway, mensaje_id, estado, motivo=False, detalle=False, frase=False
+        self,
+        gateway,
+        mensaje_id,
+        estado,
+        motivo=False,
+        detalle=False,
+        frase=False,
+        pricing=None,
     ):
         """Mueve el estado de lo que mando Odoo con ese id del portal (el del
         202). Lo usan el acuse y el `mensaje.estado` de /desde. Devuelve las
@@ -452,12 +460,24 @@ class MailGatewayAlma(models.AbstractModel):
         for mensaje in cambiadas.mail_message_id:
             mensaje._notify_message_notification_update()
         # Los de un comunicado no tienen notificacion: casan por el mismo id.
-        self.env["gts.chatroom.comunicado.destinatario"].sudo().search(
-            [
-                ("mensaje_id", "=", str(mensaje_id)),
-                ("comunicado_id.gateway_id", "=", gateway.id),
-            ]
-        )._alma_avanzar(estado, motivo, frase or detalle)
+        destinatarios = (
+            self.env["gts.chatroom.comunicado.destinatario"]
+            .sudo()
+            .search(
+                [
+                    ("mensaje_id", "=", str(mensaje_id)),
+                    ("comunicado_id.gateway_id", "=", gateway.id),
+                ]
+            )
+        )
+        destinatarios._alma_avanzar(estado, motivo, frase or detalle)
+        if isinstance(pricing, dict) and pricing.get("categoria"):
+            destinatarios.write(
+                {
+                    "cobrado_como": str(pricing["categoria"]).upper(),
+                    "facturable": bool(pricing.get("facturable")),
+                }
+            )
         return notificaciones
 
     # ------------------------------------------------------------------

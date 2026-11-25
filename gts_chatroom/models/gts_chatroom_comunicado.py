@@ -26,6 +26,7 @@ import re
 from odoo import api, fields, models
 from odoo.exceptions import UserError
 
+from .gts_chatroom_plantilla import CATEGORIAS
 from .mail_gateway_alma import _digitos
 
 _logger = logging.getLogger(__name__)
@@ -413,6 +414,30 @@ class GtsChatroomComunicadoDestinatario(models.Model):
     motivo = fields.Char("Motivo (código)")
     motivo_texto = fields.Text("Motivo")
     mensaje_id = fields.Char("Id del mensaje en el portal", index=True)
+    # LA CATEGORÍA CON LA QUE META LO COBRÓ, del acuse (Carlos, 25-11-2026).
+    # NO ES UN IMPORTE: el importe no viene. Lo que vale es la diferencia con
+    # la categoría de la plantilla: una «de utilidad» cobrada como marketing
+    # cuesta más de tres veces y no les llega a los dados de baja.
+    cobrado_como = fields.Char("Cobrado como (código)")
+    facturable = fields.Boolean("Facturable")
+    cobrado_texto = fields.Char("Se cobra como", compute="_compute_cobrado")
+    reclasificado = fields.Boolean(
+        "Meta lo cobró con otra categoría", compute="_compute_cobrado"
+    )
+
+    @api.depends("cobrado_como", "facturable", "comunicado_id.plantilla_id.categoria")
+    def _compute_cobrado(self):
+        for linea in self:
+            if not linea.cobrado_como:
+                linea.cobrado_texto = False
+                linea.reclasificado = False
+                continue
+            texto = CATEGORIAS.get(linea.cobrado_como, linea.cobrado_como.title())
+            linea.cobrado_texto = (
+                texto if linea.facturable else self.env._("%s (no facturable)", texto)
+            )
+            plantilla = linea.comunicado_id.plantilla_id.categoria
+            linea.reclasificado = bool(plantilla and plantilla != linea.cobrado_como)
 
     def _alma_avanzar(self, estado, motivo=False, frase=False):
         """Igual que el de un mensaje: solo hacia delante, que los acuses no
