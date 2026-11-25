@@ -1,0 +1,7 @@
+<?xml version="1.0" encoding="utf-8" ?>
+<odoo>
+    <!-- SIN noupdate a propósito: corre en cada actualización para que un
+         rótulo cambiado llegue también en español (ver
+         discuss_channel._gts_rotulos_de_la_cola). -->
+    <function model="discuss.channel" name="_gts_rotulos_de_la_cola" />
+</odoo>

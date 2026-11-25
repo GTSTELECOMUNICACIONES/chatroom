@@ -26,7 +26,7 @@ RELEVO = [
 COLA = [
     ("esperando", "Esperando a una persona"),
     ("contestada", "Contestada, sin asignar"),
-    ("asignada", "La atiende una persona"),
+    ("asignada", "Le atiende un operador"),
     ("ia", "Con la IA"),
     ("resuelta", "Resuelta"),
 ]
@@ -63,6 +63,31 @@ class DiscussChannel(models.Model):
     # Para el aviso de «Resuelta»: no se guarda, se mira al pintar.
     alma_ultimo_cliente = fields.Boolean(compute="_compute_alma_ultimo_cliente")
     alma_motivo_relevo = fields.Char(string="Motivo del relevo", readonly=True)
+
+    @api.model
+    def _gts_rotulos_de_la_cola(self):
+        """Los rótulos de la cola en TODOS los idiomas activos. Al actualizar,
+        Odoo solo reescribe el en_US y una instancia en español seguiría
+        enseñando el viejo («La atiende una persona» → «Le atiende un
+        operador», David, 25-11-2026). Lo llama data/rotulos_data.xml en cada
+        actualización."""
+        opciones = (
+            self.env["ir.model.fields.selection"]
+            .sudo()
+            .search(
+                [
+                    ("field_id.model", "=", "discuss.channel"),
+                    ("field_id.name", "=", "alma_cola"),
+                ]
+            )
+        )
+        rotulos = dict(COLA)
+        idiomas = ["en_US", *self.env["res.lang"].search([]).mapped("code")]
+        for opcion in opciones.filtered(lambda o: o.value in rotulos):
+            for idioma in set(idiomas):
+                opcion.with_context(lang=idioma).name = rotulos[opcion.value]
+        return True
+
     alma_cola = fields.Selection(
         COLA,
         string="Cola",
