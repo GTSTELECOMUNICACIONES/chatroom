@@ -3,6 +3,7 @@
     <menuitem
         id="menu_chatroom_root"
         name="ChatRoom"
+        web_icon="gts_chatroom,static/description/icon.png"
         groups="mail_gateway.gateway_user"
         sequence="45"
     />
