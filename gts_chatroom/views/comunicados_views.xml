@@ -85,6 +85,7 @@
         <field name="arch" type="xml">
             <list>
                 <field name="name" />
+                <field name="etiqueta_ids" widget="many2many_tags" />
                 <field name="contactos" />
                 <field name="sin_telefono" decoration-warning="sin_telefono" />
                 <field name="nota" optional="show" />
@@ -106,14 +107,44 @@
                     <field name="active" invisible="1" />
                     <h1><field name="name" placeholder="Alumnos de N2" /></h1>
                     <field name="nota" placeholder="Para qué es esta lista" />
-                    <field name="partner_ids">
-                        <list>
-                            <field name="name" />
-                            <field name="phone" />
-                            <field name="phone_sanitized" optional="hide" />
-                            <field name="email" optional="show" />
-                        </list>
-                    </field>
+                    <group name="regla_lista">
+                        <group name="etiquetas">
+                            <field name="etiqueta_ids" widget="many2many_tags" options="{'color_field': 'color'}" placeholder="Escuela · N2" />
+                            <field name="regla" invisible="len(etiqueta_ids) &lt; 2" />
+                        </group>
+                        <group name="cuenta">
+                            <field name="contactos" />
+                        </group>
+                    </group>
+                    <notebook>
+                        <page name="miembros" string="Quiénes están">
+                            <field name="miembro_ids" readonly="1">
+                                <list>
+                                    <field name="name" />
+                                    <field name="phone" />
+                                    <field name="category_id" widget="many2many_tags" optional="show" />
+                                    <field name="email" optional="hide" />
+                                </list>
+                            </field>
+                        </page>
+                        <page name="anadidos" string="Añadidos a mano">
+                            <field name="partner_ids">
+                                <list>
+                                    <field name="name" />
+                                    <field name="phone" />
+                                    <field name="email" optional="show" />
+                                </list>
+                            </field>
+                        </page>
+                        <page name="quitados" string="Quitados a mano">
+                            <field name="excluido_ids">
+                                <list>
+                                    <field name="name" />
+                                    <field name="phone" />
+                                </list>
+                            </field>
+                        </page>
+                    </notebook>
                 </sheet>
             </form>
         </field>
@@ -124,7 +155,7 @@
         <field name="view_mode">list,form</field>
         <field name="help" type="html">
             <p class="o_view_nocontent_smiling_face">Crea la primera lista.</p>
-            <p>Una lista es un grupo de contactos al que mandar un comunicado: «Alumnos de N2», «Team»… También se llena desde Contactos o desde las matrículas de la escuela, con «Añadir a una lista de difusión».</p>
+            <p>Una lista es un grupo de contactos al que mandar un comunicado. Pon una etiqueta («Escuela · N2») y entran solos todos los que la llevan; añade o quita a mano a quien haga falta.</p>
         </field>
     </record>
 

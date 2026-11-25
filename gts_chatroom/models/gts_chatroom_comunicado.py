@@ -199,7 +199,7 @@ class GtsChatroomComunicado(models.Model):
             comunicado.destinatario_ids.unlink()
             vistos = set()
             lineas = []
-            for partner in comunicado.lista_ids.partner_ids | comunicado.partner_ids:
+            for partner in comunicado.lista_ids.miembro_ids | comunicado.partner_ids:
                 telefono = _digitos(partner.phone_sanitized)
                 if telefono and telefono in vistos:
                     continue

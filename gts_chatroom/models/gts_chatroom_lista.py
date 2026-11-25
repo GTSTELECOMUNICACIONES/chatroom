@@ -25,30 +25,76 @@ class GtsChatroomLista(models.Model):
     _order = "name"
 
     name = fields.Char("Nombre", required=True)
+    # LISTA DINÁMICA (David, 25-11-2026, como las del portal): entran solos
+    # los contactos con estas etiquetas, y además se añade o se quita a mano
+    # a quien haga falta (José, que es empleado y no lleva la de N2). La
+    # escuela mantiene sola las etiquetas de nivel de los tutores.
+    etiqueta_ids = fields.Many2many(
+        "res.partner.category",
+        "gts_chatroom_lista_etiqueta_rel",
+        "lista_id",
+        "etiqueta_id",
+        string="Entran los contactos con",
+        help="Cualquier contacto con estas etiquetas está en la lista, y deja "
+        "de estarlo cuando se le quita la etiqueta.",
+    )
+    regla = fields.Selection(
+        [("alguna", "Alguna de las etiquetas"), ("todas", "Todas las etiquetas")],
+        "Regla",
+        default="alguna",
+        required=True,
+    )
     partner_ids = fields.Many2many(
         "res.partner",
         "gts_chatroom_lista_partner_rel",
         "lista_id",
         "partner_id",
-        string="Contactos",
+        string="Añadidos a mano",
     )
-    contactos = fields.Integer("Contactos", compute="_compute_contactos")
+    excluido_ids = fields.Many2many(
+        "res.partner",
+        "gts_chatroom_lista_excluido_rel",
+        "lista_id",
+        "partner_id",
+        string="Quitados a mano",
+        help="No reciben aunque tengan la etiqueta.",
+    )
+    miembro_ids = fields.Many2many(
+        "res.partner",
+        string="Quiénes están",
+        compute="_compute_miembros",
+        help="Los de las etiquetas, más los añadidos, menos los quitados. Se "
+        "calcula al momento: es la lista que recibe el comunicado.",
+    )
+    contactos = fields.Integer("Contactos", compute="_compute_miembros")
     sin_telefono = fields.Integer(
         "Sin teléfono válido",
-        compute="_compute_contactos",
+        compute="_compute_miembros",
         help="Contactos sin un teléfono que se pueda usar en WhatsApp: no les "
         "llegará ningún comunicado.",
     )
     nota = fields.Text("Para qué es")
     active = fields.Boolean(default=True)
 
-    @api.depends("partner_ids", "partner_ids.phone_sanitized")
-    def _compute_contactos(self):
+    def _de_las_etiquetas(self):
+        self.ensure_one()
+        if not self.etiqueta_ids:
+            return self.env["res.partner"]
+        if self.regla == "todas":
+            dominio = [("category_id", "in", e.id) for e in self.etiqueta_ids]
+        else:
+            dominio = [("category_id", "in", self.etiqueta_ids.ids)]
+        return self.env["res.partner"].search(dominio)
+
+    @api.depends("etiqueta_ids", "regla", "partner_ids", "excluido_ids")
+    def _compute_miembros(self):
         for lista in self:
-            lista.contactos = len(lista.partner_ids)
-            lista.sin_telefono = len(
-                lista.partner_ids.filtered(lambda p: not p.phone_sanitized)
-            )
+            miembros = (
+                lista._de_las_etiquetas() | lista.partner_ids
+            ) - lista.excluido_ids
+            lista.miembro_ids = miembros
+            lista.contactos = len(miembros)
+            lista.sin_telefono = len(miembros.filtered(lambda p: not p.phone_sanitized))
 
     def accion_ver_sin_telefono(self):
         self.ensure_one()
@@ -58,7 +104,7 @@ class GtsChatroomLista(models.Model):
             "res_model": "res.partner",
             "view_mode": "list,form",
             "domain": [
-                ("id", "in", self.partner_ids.ids),
+                ("id", "in", self.miembro_ids.ids),
                 ("phone_sanitized", "=", False),
             ],
         }
