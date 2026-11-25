@@ -67,3 +67,18 @@ plantilla:
 rechazado para un comunicado de marketing y aceptado para uno de utilidad.
 El catálogo no llama al proveedor (Gupshup: 10 peticiones/min por app): es la
 copia del portal; `aviso` dice si está vacío o sin copiar.
+
+## El lote, tal como quedó (Carlos, 25-11-2026, noche)
+
+`POST /api/odoo/enviar/lote` → 202 `{aceptados: [{a, mensaje_id}], rechazados:
+[{a, alma_motivo, error}], enviando: N}`.
+
+- **Sin `lote_id` ni `GET /lote/<id>`**: el agregado se hace en Odoo con los
+  `mensaje_id` y sus acuses (un segundo contador acabaría diciendo otra cosa).
+- **Tope 300 por lote** (límite de tiempo de la función). Más: `lote_demasiado_grande`.
+  Odoo parte la lista.
+- Rechazos nuevos: `repetido_en_el_lote` (manda uno y dice cuál descartó) y
+  `telefono_invalido`.
+- Si el portal no puede leer las fichas (bajas), no sale NADA. El saldo se mira
+  una vez para el lote entero. Uno que falle no para el resto: su acuse lo dice.
+- Carlos quiere saber aceptados/rechazados de la primera lista real.
