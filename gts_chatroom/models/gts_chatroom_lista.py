@@ -16,8 +16,14 @@ basta con que su modelo tenga `_gts_chatroom_contactos()` y abra el asistente
 GTS Racing, desde sus matriculas, en su propio repo).
 """
 
+import datetime
+from ast import literal_eval
+
+from dateutil.relativedelta import relativedelta
+
 from odoo import api, fields, models
 from odoo.exceptions import UserError
+from odoo.tools.safe_eval import safe_eval
 
 
 class GtsChatroomLista(models.Model):
@@ -44,6 +50,18 @@ class GtsChatroomLista(models.Model):
         "Regla",
         default="alguna",
         required=True,
+    )
+    # EL FILTRO DE ODOO (David, 25-11-2026): el mismo editor que Email
+    # Marketing, sobre cualquier campo del contacto -cliente, proveedor,
+    # país, comercial, empresa…-, para segmentar campañas («clientes con la
+    # etiqueta Potencial»). Si hay etiquetas además, tienen que cumplirse
+    # las dos cosas.
+    modelo_filtro = fields.Char(default="res.partner", readonly=True)
+    dominio = fields.Char(
+        "Filtro",
+        default="[]",
+        help="Los contactos que cumplan este filtro están en la lista, y dejan "
+        "de estarlo cuando dejan de cumplirlo. Vacío, no filtra.",
     )
     partner_ids = fields.Many2many(
         "res.partner",
@@ -77,21 +95,53 @@ class GtsChatroomLista(models.Model):
     nota = fields.Text("Para qué es")
     active = fields.Boolean(default=True)
 
-    def _de_las_etiquetas(self):
+    def _filtro(self):
+        """El dominio del editor, o None si la lista no filtra nada."""
         self.ensure_one()
-        if not self.etiqueta_ids:
+        try:
+            dominio = literal_eval(self.dominio or "[]")
+        except (ValueError, SyntaxError):
+            # Un filtro con fechas relativas («hoy», «hace 30 días») lo
+            # guarda el editor como expresión, no como valor.
+            try:
+                dominio = safe_eval(
+                    self.dominio,
+                    {
+                        "uid": self.env.uid,
+                        "context_today": lambda: fields.Date.context_today(self),
+                        "datetime": datetime,
+                        "relativedelta": relativedelta,
+                    },
+                )
+            except Exception as error:  # noqa: BLE001 - se dice cuál falla
+                raise UserError(
+                    self.env._("El filtro de la lista %s no se entiende.", self.name)
+                ) from error
+        if not isinstance(dominio, list):
+            raise UserError(
+                self.env._("El filtro de la lista %s no se entiende.", self.name)
+            )
+        if self.etiqueta_ids:
+            if self.regla == "todas":
+                dominio += [("category_id", "in", e.id) for e in self.etiqueta_ids]
+            else:
+                dominio += [("category_id", "in", self.etiqueta_ids.ids)]
+        elif not dominio:
+            return None
+        return dominio
+
+    def _de_los_filtros(self):
+        self.ensure_one()
+        dominio = self._filtro()
+        if dominio is None:
             return self.env["res.partner"]
-        if self.regla == "todas":
-            dominio = [("category_id", "in", e.id) for e in self.etiqueta_ids]
-        else:
-            dominio = [("category_id", "in", self.etiqueta_ids.ids)]
         return self.env["res.partner"].search(dominio)
 
-    @api.depends("etiqueta_ids", "regla", "partner_ids", "excluido_ids")
+    @api.depends("dominio", "etiqueta_ids", "regla", "partner_ids", "excluido_ids")
     def _compute_miembros(self):
         for lista in self:
             miembros = (
-                lista._de_las_etiquetas() | lista.partner_ids
+                lista._de_los_filtros() | lista.partner_ids
             ) - lista.excluido_ids
             lista.miembro_ids = miembros
             lista.contactos = len(miembros)

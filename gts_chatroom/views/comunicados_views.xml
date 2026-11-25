@@ -116,6 +116,11 @@
                             <field name="contactos" />
                         </group>
                     </group>
+                    <!-- El editor de filtros de Odoo, el de Email Marketing:
+                         cliente, proveedor, país, comercial… -->
+                    <field name="modelo_filtro" invisible="1" />
+                    <label for="dominio" string="Y que cumplan" />
+                    <field name="dominio" widget="domain" options="{'model': 'modelo_filtro', 'foldable': true}" />
                     <notebook>
                         <page name="miembros" string="Quiénes están">
                             <field name="miembro_ids" readonly="1">
