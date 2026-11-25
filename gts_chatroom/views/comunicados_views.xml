@@ -275,10 +275,14 @@
                          plantilla (David, 25-11-2026). -->
                     <div invisible="not variables">
                         <label for="dato_ids" string="Rellena los datos de la plantilla" class="fw-bold" />
+                        <div class="alert alert-info py-2 my-2" role="status" invisible="not ejemplo_texto">
+                            Así se la enseñamos a Meta: <i><field name="ejemplo_texto" readonly="1" class="d-inline" /></i>
+                        </div>
                         <field name="dato_ids" readonly="state != 'borrador'">
                             <list editable="bottom" create="0" delete="0">
                                 <field name="posicion" readonly="1" width="60px" />
                                 <field name="pista" readonly="1" />
+                                <field name="ejemplo" readonly="1" optional="show" />
                                 <field name="valor" placeholder="Escribe aquí, en una sola línea" />
                             </list>
                         </field>

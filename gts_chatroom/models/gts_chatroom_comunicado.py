@@ -89,6 +89,7 @@ class GtsChatroomComunicado(models.Model):
     categoria_texto = fields.Char(related="plantilla_id.categoria_texto")
     es_marketing = fields.Boolean(compute="_compute_es_marketing")
     variables = fields.Integer(related="plantilla_id.variables_cuerpo")
+    ejemplo_texto = fields.Text(related="plantilla_id.ejemplo_texto")
     # UNA CASILLA POR DATO (David, 25-11-2026): un texto con «uno por línea»
     # no era cómodo. Salen solas al elegir la plantilla, con la frase en la
     # que va cada una. `parametros` queda solo para los borradores de antes.
@@ -452,6 +453,7 @@ class GtsChatroomComunicadoDato(models.Model):
     )
     posicion = fields.Integer("Dato", required=True)
     pista = fields.Char("Dónde va", compute="_compute_pista")
+    ejemplo = fields.Char("Ejemplo", compute="_compute_pista")
     valor = fields.Char("Texto")
 
     @api.depends("posicion", "comunicado_id.plantilla_id.cuerpo")
@@ -490,3 +492,9 @@ class GtsChatroomComunicadoDato(models.Model):
                 )
                 break
             dato.pista = pista[:200]
+            ejemplos = dato.comunicado_id.plantilla_id.ejemplos or {}
+            dato.ejemplo = (
+                str(ejemplos.get(str(dato.posicion)) or "")
+                if isinstance(ejemplos, dict)
+                else ""
+            ) or False

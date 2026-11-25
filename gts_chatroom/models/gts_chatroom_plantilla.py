@@ -57,6 +57,12 @@ class GtsChatroomPlantilla(models.Model):
         "Datos que hay que rellenar",
         help="Cuántos {{1}}, {{2}}… lleva el texto.",
     )
+    # LOS EJEMPLOS QUE VIO META (Carlos, 25-11-2026). Meta guarda el cuerpo
+    # entero relleno; el portal lo separa por dato cuando puede. Con dos
+    # datos pegados no se puede, y entonces solo viene el texto entero:
+    # mejor ninguna pista por casilla que una equivocada.
+    ejemplos = fields.Json("Ejemplos por dato")
+    ejemplo_texto = fields.Text("Ejemplo que vio Meta")
     se_puede_enviar = fields.Boolean("Se puede enviar")
     por_que_no = fields.Char("Por qué no se puede enviar")
     active = fields.Boolean(default=True)
@@ -160,6 +166,12 @@ class GtsChatroomPlantilla(models.Model):
                 )
                 or False,
                 "variables_cuerpo": int(variables.get("cuerpo") or 0),
+                "ejemplos": (
+                    item["ejemplos"]
+                    if isinstance(item.get("ejemplos"), dict)
+                    else False
+                ),
+                "ejemplo_texto": item.get("ejemplo_texto") or False,
                 "se_puede_enviar": bool(item.get("se_puede_enviar")),
                 "por_que_no": item.get("por_que_no") or False,
                 "active": True,
