@@ -63,7 +63,7 @@
     </record>
 
     <record id="mail_gateway_alma_action" model="ir.actions.act_window">
-        <field name="name">Pasarelas</field>
+        <field name="name">Canales</field>
         <field name="res_model">mail.gateway</field>
         <field name="view_mode">list,form</field>
         <field name="domain">[('gateway_type', '=', 'alma')]</field>
