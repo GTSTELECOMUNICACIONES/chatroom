@@ -110,7 +110,7 @@
                     <group name="regla_lista">
                         <group name="etiquetas">
                             <field name="etiqueta_ids" widget="many2many_tags" options="{'color_field': 'color'}" placeholder="Escuela · N2" />
-                            <field name="regla" invisible="len(etiqueta_ids) &lt; 2" />
+                            <field name="regla" />
                         </group>
                         <group name="cuenta">
                             <field name="contactos" />
