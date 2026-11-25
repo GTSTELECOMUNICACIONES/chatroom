@@ -79,10 +79,12 @@ class GtsChatroomPlantilla(models.Model):
                 f"{plantilla.name} ({plantilla.categoria_texto or '?'})"
             )
 
-    @api.model
+    # SIN @api.model: el botón de la cabecera de la lista llama con los ids
+    # marcados (vacíos) como argumento, y un método de modelo revienta con
+    # «takes 1 positional argument but 2 were given» (25-11-2026).
     def accion_actualizar(self):
         """Botón de la lista: copia el catálogo de todas las pasarelas del
-        portal integradas."""
+        portal integradas. No usa los registros: copia todo."""
         pasarelas = self.env["mail.gateway"].search(
             [
                 ("gateway_type", "=", "alma"),
