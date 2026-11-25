@@ -1,4 +1,5 @@
-"""LISTAS DE DIFUSION (David, 25-11-2026): «los de N2», «los de N3»…
+"""LISTAS DE DIFUSION (David, 25-11-2026). GENERICAS: el ChatRoom es de
+todos los clientes (COPYE, GTS Racing…); lo propio de uno va en su repo.
 
 Una lista es un grupo de contactos de Odoo. No se usan las de Email
 Marketing: su contacto no guarda el movil sin `mass_mailing_sms`, y en la 19
@@ -11,8 +12,8 @@ envejeceria.
 
 Otro modulo puede llenar una lista desde sus fichas sin depender de este:
 basta con que su modelo tenga `_gts_chatroom_contactos()` y abra el asistente
-`action_lista_anadir` con `active_model` y `active_ids` (lo hace la escuela
-desde las matriculas).
+`action_lista_anadir` con `active_model` y `active_ids` (p. ej. la escuela de
+GTS Racing, desde sus matriculas, en su propio repo).
 """
 
 from odoo import api, fields, models
@@ -28,7 +29,7 @@ class GtsChatroomLista(models.Model):
     # LISTA DINÁMICA (David, 25-11-2026, como las del portal): entran solos
     # los contactos con estas etiquetas, y además se añade o se quita a mano
     # a quien haga falta (José, que es empleado y no lleva la de N2). La
-    # escuela mantiene sola las etiquetas de nivel de los tutores.
+    # etiqueta la mantiene quien sea: a mano, o un modulo del cliente.
     etiqueta_ids = fields.Many2many(
         "res.partner.category",
         "gts_chatroom_lista_etiqueta_rel",
@@ -124,7 +125,7 @@ class GtsChatroomListaAnadir(models.TransientModel):
     vaciar = fields.Boolean(
         "Vaciar la lista antes",
         help="Marcado, la lista queda solo con estos contactos: es lo que se "
-        "quiere al rehacer «los de N2» desde las matrículas de hoy.",
+        "quiere al rehacer una lista desde cero.",
     )
 
     @api.model
