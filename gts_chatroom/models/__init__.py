@@ -8,3 +8,4 @@ from . import res_config_settings
 from . import gts_chatroom_plantilla
 from . import gts_chatroom_lista
 from . import gts_chatroom_comunicado
+from . import res_partner
