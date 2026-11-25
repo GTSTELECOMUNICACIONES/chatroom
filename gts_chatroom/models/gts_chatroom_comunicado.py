@@ -160,8 +160,20 @@ class GtsChatroomComunicado(models.Model):
             comunicado.fallidos = estados.count("fallido")
 
     # ------------------------------------------------------------------
-    # Preparar
+    # Preparar: solo al guardar y al enviar (David quitó el botón)
     # ------------------------------------------------------------------
+
+    @api.model_create_multi
+    def create(self, vals_list):
+        comunicados = super().create(vals_list)
+        comunicados.accion_preparar()
+        return comunicados
+
+    def write(self, vals):
+        res = super().write(vals)
+        if {"lista_ids", "partner_ids"} & set(vals):
+            self.filtered(lambda c: c.state == "borrador").accion_preparar()
+        return res
 
     def _comprobar_parametros(self):
         self.ensure_one()
@@ -231,8 +243,9 @@ class GtsChatroomComunicado(models.Model):
         if self.gateway_id.integrated_webhook_state != "integrated":
             raise UserError(self.env._("La pasarela no está integrada."))
         self._comprobar_parametros()
-        if not self.destinatario_ids:
-            self.accion_preparar()
+        # Siempre de nuevo: las listas son dinámicas y quien está hoy puede
+        # no ser quien estaba al guardar.
+        self.accion_preparar()
         if not self.destinatario_ids.filtered(lambda d: d.estado == "pendiente"):
             raise UserError(self.env._("Ningún destinatario tiene un teléfono válido."))
         self.write(

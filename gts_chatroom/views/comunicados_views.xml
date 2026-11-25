@@ -221,7 +221,6 @@
         <field name="arch" type="xml">
             <form>
                 <header>
-                    <button name="accion_preparar" type="object" string="Ver destinatarios" invisible="state != 'borrador'" />
                     <button name="accion_enviar" type="object" string="Enviar" class="btn-primary" invisible="state != 'borrador'" confirm="Se va a mandar el comunicado a todos los destinatarios. Cada mensaje se paga y no se puede retirar. ¿Enviar?" />
                     <button name="accion_volver_a_borrador" type="object" string="Volver a borrador" invisible="state != 'error'" />
                     <field name="state" widget="statusbar" statusbar_visible="borrador,enviando,enviado" />
