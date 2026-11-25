@@ -47,3 +47,23 @@ el portal (conoce los límites del proveedor): Odoo NO envía de uno en uno.
 Tope 1.000 por lote; el saldo se comprueba para el lote entero antes de
 empezar. Lo que sale llega por los acuses de siempre. `GET
 /api/odoo/lote/<id>` da el estado agregado.
+
+## Estado y rechazos (Carlos, 25-11-2026, tarde)
+
+Las rutas 1 y 3 están en producción del portal. Rechazos de `/enviar` con
+plantilla:
+
+| Código | Motivo | Qué es |
+|---|---|---|
+| 402 | `trial_caducado`, `sin_saldo` | La cuenta está cortada: el comunicado entero no sale |
+| 409 | `bloqueado` | Contacto bloqueado |
+| 409 | `baja_marketing` | Baja de comerciales; SOLO con plantilla de marketing |
+| 409 | `plantilla_no_soportada` | Variable en cabecera o en botón |
+| 404 | `plantilla_no_encontrada` | No está en el catálogo de ese número |
+| 400 | `parametros_incorrectos` | Sobran o faltan; cuenta los del CUERPO (`variables.cuerpo`) |
+| 429 | `posible_bucle` | El mismo mensaje montado a la misma persona 3 veces en 5 min |
+
+`baja_marketing` NO se cachea por contacto: el mismo contacto puede ser
+rechazado para un comunicado de marketing y aceptado para uno de utilidad.
+El catálogo no llama al proveedor (Gupshup: 10 peticiones/min por app): es la
+copia del portal; `aviso` dice si está vacío o sin copiar.
