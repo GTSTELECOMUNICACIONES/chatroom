@@ -31,6 +31,13 @@ import sys
 
 COMENTARIO = re.compile(r"<!--.*?-->", re.DOTALL)
 ATRIBUTO = re.compile(r"([\w:-]+)\s*=")
+# El evaluador de expresiones del cliente de la 19 NO es Python: `len`,
+# `any`, `all`… no existen y la ficha revienta al abrirla con «Name 'len' is
+# not defined» (gts_chatroom 0.4.2, 25-11-2026). Se instala sin error.
+FUNCION_EN_EXPRESION = re.compile(
+    r"\b(invisible|readonly|required|column_invisible)=\"[^\"]*\b"
+    r"(len|any|all|sum|min|max|sorted|filter|map)\("
+)
 
 # Lo que common.rng permite en <group>. Cualquier otro atributo rompe la
 # instalacion si el <group> esta dentro de una vista search.
@@ -67,6 +74,14 @@ def main(ruta):
                 en_search = True
             if "</search>" in linea:
                 en_search = False
+            funcion = FUNCION_EN_EXPRESION.search(linea)
+            if funcion:
+                print(
+                    "%s:%s: `%s()` en `%s`: el cliente de la 19 no lo conoce y "
+                    "la vista revienta al abrirla"
+                    % (fichero.name, numero, funcion.group(2), funcion.group(1))
+                )
+                fallos += 1
             if "<group" not in linea:
                 continue
             etiqueta = linea[linea.index("<group") :]
