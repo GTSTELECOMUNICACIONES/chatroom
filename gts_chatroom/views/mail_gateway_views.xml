@@ -56,6 +56,20 @@
                 />
                 <field name="alma_ultimo_evento" invisible="gateway_type != 'alma'" />
             </field>
+            <!-- Los operadores, con cómo les llaman los clientes: es lo que
+                 recibe el portal para «pásame con David». -->
+            <field name="member_ids" position="replace">
+                <field name="member_ids">
+                    <list editable="bottom">
+                        <field name="name" readonly="1" />
+                        <field name="login" readonly="1" />
+                        <field
+                            name="gts_chatroom_nombres"
+                            placeholder="David, David Fernández"
+                        />
+                    </list>
+                </field>
+            </field>
             <notebook position="inside">
                 <page
                     name="alma"

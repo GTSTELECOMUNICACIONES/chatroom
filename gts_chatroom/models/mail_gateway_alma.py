@@ -499,6 +499,9 @@ class MailGatewayAlma(models.AbstractModel):
     # Salida
     # ------------------------------------------------------------------
 
+    def _alma_numero_de(self, gateway):
+        return _digitos(gateway.alma_numero)
+
     def _alma_peticion(self, gateway, metodo, ruta, **kwargs):
         if not gateway.alma_url:
             raise MailDeliveryException(

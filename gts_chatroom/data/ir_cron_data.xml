@@ -35,4 +35,15 @@
         <field name="interval_number">10</field>
         <field name="interval_type">minutes</field>
     </record>
+
+    <!-- La lista de operadores al portal, una vez al día como red: se manda
+         también al momento cuando cambia. -->
+    <record id="ir_cron_enviar_operadores" model="ir.cron">
+        <field name="name">ChatRoom: mandar la lista de operadores al portal</field>
+        <field name="model_id" ref="mail_gateway.model_mail_gateway" />
+        <field name="state">code</field>
+        <field name="code">model._gts_enviar_operadores_a_todos()</field>
+        <field name="interval_number">1</field>
+        <field name="interval_type">days</field>
+    </record>
 </odoo>
