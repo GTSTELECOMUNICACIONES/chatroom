@@ -50,6 +50,7 @@ PY
   paso "inversos de los One2many" $VENV/python "$RAIZ/tools/comprobar_inversos.py" "$MOD"
   paso "x2many repetidos" $VENV/python "$RAIZ/tools/comprobar_duplicados.py" "$MOD"
   paso "instalacion" $VENV/python "$RAIZ/tools/comprobar_instalacion.py" "$MOD"
+  paso "campos en modelos calientes" $VENV/python "$RAIZ/tools/comprobar_modelos_calientes.py" "$MOD"
   # necesita el fuente de los modulos cuyos <record> creamos
   # --fuente son FICHEROS .py, no carpetas: el fuente de los modelos cuyos
   # <record> creamos nosotros (res.groups, ir.rule...) y los nuestros.
