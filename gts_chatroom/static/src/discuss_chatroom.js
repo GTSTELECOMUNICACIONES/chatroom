@@ -249,13 +249,41 @@ patch(DiscussClientAction.prototype, {
         // Antes de pintar: el lateral se dibuja ya filtrado.
         vista.soloChatroom = Boolean(this.props.action?.context?.gts_chatroom);
     },
-    getActiveId(props) {
-        const activeId = super.getActiveId(props);
-        // La última vez se miró la bandeja de entrada: aquí no se abre.
-        if (vista.soloChatroom && String(activeId || "").startsWith("mail.box")) {
-            return undefined;
+    async restoreDiscussThread(props) {
+        if (!vista.soloChatroom) {
+            return super.restoreDiscussThread(props);
         }
-        return activeId;
+        // EN EL CHATROOM SOLO SE ABRE UNA CONVERSACIÓN DEL CHATROOM (David,
+        // 26-11-2026): a José, recién dado de alta, le salía al entrar la
+        // última conversación interna de Odoo o el chat de bienvenida de
+        // OdooBot. Se abre la que pide el enlace (una tarjeta, un aviso) o la
+        // última del ChatRoom; si no hay, la ventana queda en blanco hasta
+        // que entre una.
+        const explicito =
+            props.action.context.active_id ?? props.action.params?.active_id;
+        const candidato =
+            explicito ||
+            this.store.Thread.localIdToActiveId(this.store.discuss.thread?.localId) ||
+            this.store.discuss.lastActiveId;
+        if (candidato && (explicito || this._gtsEsDelChatroom(candidato))) {
+            return super.restoreDiscussThread({
+                ...props,
+                action: {
+                    ...props.action,
+                    context: { ...props.action.context, active_id: candidato },
+                },
+            });
+        }
+        this.store.discuss.thread = undefined;
+        this.store.discuss.hasRestoredThread = true;
+    },
+    _gtsEsDelChatroom(activeId) {
+        const [model, id] = String(activeId).split("_");
+        if (model !== "discuss.channel") {
+            return false;
+        }
+        const thread = this.store.Thread.get({ model, id: parseInt(id) });
+        return thread?.channel_type === "gateway";
     },
 });
 
