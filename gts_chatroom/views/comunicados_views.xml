@@ -5,7 +5,7 @@
         <field name="name">gts.chatroom.plantilla.list</field>
         <field name="model">gts.chatroom.plantilla</field>
         <field name="arch" type="xml">
-            <list create="0" decoration-muted="not se_puede_enviar">
+            <list decoration-muted="not se_puede_enviar">
                 <header>
                     <button name="accion_actualizar" type="object" string="Copiar del portal" icon="fa-refresh" class="btn-primary" display="always" />
                 </header>
@@ -25,31 +25,81 @@
         <field name="name">gts.chatroom.plantilla.form</field>
         <field name="model">gts.chatroom.plantilla</field>
         <field name="arch" type="xml">
-            <form create="0" edit="0">
+            <form>
+                <header>
+                    <button name="accion_enviar_aprobacion" type="object" string="Enviar para aprobación" class="btn-primary" invisible="not editable" />
+                    <field name="estado" widget="badge" readonly="1" />
+                </header>
                 <sheet>
-                    <div class="alert alert-warning" role="alert" invisible="se_puede_enviar">
+                    <field name="editable" invisible="1" />
+                    <field name="creada_en_odoo" invisible="1" />
+                    <field name="modelo" invisible="1" />
+                    <div class="alert alert-warning" role="alert" invisible="se_puede_enviar or not alma_id or not por_que_no">
                         <field name="por_que_no" readonly="1" />
+                    </div>
+                    <div class="alert alert-danger" role="alert" invisible="not motivo">
+                        Meta la rechazó: <field name="motivo" readonly="1" class="d-inline" />
                     </div>
                     <div class="alert alert-info" role="status" invisible="not reclasificada">
                         Meta la ha reclasificado: se cobra y se trata como <field name="categoria_texto" class="fw-bold" readonly="1" />.
                     </div>
-                    <h1><field name="name" readonly="1" /></h1>
+                    <div class="alert alert-info" role="status" invisible="alma_id">
+                        Borrador: escribe la plantilla, pon un ejemplo a cada dato y pulsa «Enviar para aprobación». Meta suele contestar en minutos.
+                    </div>
+                    <label for="name" string="Nombre" />
+                    <h1><field name="name" readonly="not editable" placeholder="p. ej. Recordatorio de clase" /></h1>
+                    <div class="text-muted small" invisible="not editable">Para Meta: <field name="nombre_meta" class="d-inline" /></div>
                     <group name="principal_1">
                         <group name="meta">
-                            <field name="categoria_texto" />
-                            <field name="estado" />
-                            <field name="motivo" invisible="not motivo" />
-                            <field name="idioma" />
+                            <field name="gateway_id" readonly="alma_id" options="{'no_create': True, 'no_open': True}" />
+                            <field name="categoria_alta" invisible="not editable" />
+                            <field name="categoria_texto" invisible="editable" />
+                            <field name="idioma_alta" invisible="not editable" />
+                            <field name="idioma" invisible="editable" />
+                            <field name="alma_id" invisible="1" />
                         </group>
-                        <group name="contenido">
-                            <field name="variables_cuerpo" />
-                            <field name="cabecera" invisible="not cabecera" />
+                        <group name="uso">
+                            <field name="model_id" options="{'no_create': True, 'no_open': True}" />
+                            <field name="campo_telefono" widget="field_selector" options="{'model': 'modelo'}" invisible="not model_id" />
                             <field name="se_puede_enviar" invisible="1" />
                             <field name="reclasificada" invisible="1" />
-                            <field name="gateway_id" />
                         </group>
                     </group>
-                    <field name="cuerpo" readonly="1" />
+                    <notebook>
+                        <page name="texto" string="Texto">
+                            <group name="texto">
+                                <field name="cabecera" readonly="not editable" placeholder="Opcional, hasta 60 caracteres y sin datos" />
+                                <field name="cuerpo" readonly="not editable" widget="text" placeholder="Hola {{1}}, te recordamos tu clase del {{2}}. Si no puedes venir, avísanos." />
+                                <field name="pie" readonly="not editable" placeholder="Opcional, hasta 60 caracteres" />
+                            </group>
+                        </page>
+                        <page name="datos" string="Datos" invisible="not variables_cuerpo">
+                            <field name="variables_cuerpo" invisible="1" />
+                            <field name="variable_ids">
+                                <list editable="bottom" create="0" delete="0">
+                                    <field name="modelo" column_invisible="1" />
+                                    <field name="posicion" readonly="1" width="60px" />
+                                    <field name="ejemplo" readonly="parent.alma_id and not parent.editable" />
+                                    <field name="origen" />
+                                    <field name="campo" widget="field_selector" options="{'model': 'modelo'}" invisible="origen != 'campo'" />
+                                    <field name="por_defecto" invisible="origen != 'libre'" />
+                                </list>
+                            </field>
+                        </page>
+                        <page name="botones" string="Botones">
+                            <field name="boton_ids" readonly="not editable">
+                                <list editable="bottom">
+                                    <field name="sequence" widget="handle" />
+                                    <field name="tipo" />
+                                    <field name="texto" />
+                                    <field name="valor" invisible="tipo == 'respuesta'" />
+                                </list>
+                            </field>
+                        </page>
+                        <page name="ejemplo" string="Ejemplo que vio Meta" invisible="not ejemplo_texto">
+                            <field name="ejemplo_texto" readonly="1" />
+                        </page>
+                    </notebook>
                 </sheet>
             </form>
         </field>
@@ -73,8 +123,8 @@
         <field name="res_model">gts.chatroom.plantilla</field>
         <field name="view_mode">list,form</field>
         <field name="help" type="html">
-            <p class="o_view_nocontent_smiling_face">Aún no se han copiado las plantillas.</p>
-            <p>Pulsa «Copiar del portal»: se traen las de WhatsApp de la cuenta, con su estado en Meta.</p>
+            <p class="o_view_nocontent_smiling_face">Aún no hay plantillas.</p>
+            <p>Pulsa «Copiar del portal» para traer las de la cuenta, o «Nuevo» para escribir una y mandarla a aprobar.</p>
         </field>
     </record>
 

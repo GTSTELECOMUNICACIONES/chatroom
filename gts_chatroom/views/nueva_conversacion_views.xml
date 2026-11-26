@@ -8,8 +8,11 @@
             <form string="Nueva conversación">
                 <group name="quien">
                     <group name="contacto">
+                        <field name="res_model" invisible="1" />
+                        <field name="res_id" invisible="1" />
+                        <field name="registro_nombre" invisible="not res_model" />
                         <field name="partner_id" options="{'no_create': True}" />
-                        <field name="telefono" invisible="not partner_id" />
+                        <field name="telefono" placeholder="+34 6XX XX XX XX" />
                     </group>
                     <group name="canal">
                         <field name="gateway_id" options="{'no_create': True, 'no_open': True}" />
@@ -21,11 +24,12 @@
                     Te ha escrito en las últimas 24 horas: no hace falta plantilla. Pulsa
                     «Abrir la conversación» y escríbele directamente.
                 </div>
-                <div class="alert alert-info py-2" role="status" invisible="ventana_abierta or not partner_id">
+                <div class="alert alert-info py-2" role="status" invisible="ventana_abierta or not (partner_id or telefono)">
                     Para escribirle hace falta una plantilla aprobada (Meta lo exige si no te ha
                     escrito en las últimas 24 horas). Vale cualquiera: de utilidad o de marketing.
                 </div>
                 <group name="plantilla">
+                    <field name="plantilla_permitida_ids" invisible="1" />
                     <field name="plantilla_id" options="{'no_create': True}" />
                     <field name="categoria_texto" invisible="not plantilla_id" />
                 </group>

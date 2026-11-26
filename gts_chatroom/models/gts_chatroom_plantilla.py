@@ -32,7 +32,9 @@ class GtsChatroomPlantilla(models.Model):
     gateway_id = fields.Many2one(
         "mail.gateway", "Pasarela", required=True, ondelete="cascade", index=True
     )
-    alma_id = fields.Char("Id en el portal", required=True, index=True)
+    # Vacío mientras es un borrador creado en Odoo y no se ha mandado a
+    # aprobar (gts_chatroom_plantilla_alta.py).
+    alma_id = fields.Char("Id en el portal", index=True, copy=False)
     name = fields.Char("Nombre", required=True)
     idioma = fields.Char("Idioma")
     categoria = fields.Char(
@@ -140,6 +142,8 @@ class GtsChatroomPlantilla(models.Model):
             raise UserError(Alma._alma_texto_error(respuesta, datos))
         Plantilla = self.with_context(active_test=False)
         vistas = self.browse()
+        # Lo que solo sabe Odoo de una plantilla creada aquí (su nombre
+        # legible, a qué se aplica, de dónde sale cada dato) no se pisa.
         for item in datos.get("plantillas") or []:
             if not isinstance(item, dict) or not item.get("id"):
                 continue
@@ -181,11 +185,18 @@ class GtsChatroomPlantilla(models.Model):
                 limit=1,
             )
             if plantilla:
+                if plantilla.creada_en_odoo:
+                    vals.pop("name")
                 plantilla.write(vals)
             else:
                 plantilla = Plantilla.create(vals)
             vistas |= plantilla
+        # Los borradores de Odoo no están en el portal todavía: no se archivan.
         Plantilla.search(
-            [("gateway_id", "=", gateway.id), ("id", "not in", vistas.ids)]
+            [
+                ("gateway_id", "=", gateway.id),
+                ("id", "not in", vistas.ids),
+                ("alma_id", "!=", False),
+            ]
         ).write({"active": False})
         return len(vistas), datos.get("aviso") or False

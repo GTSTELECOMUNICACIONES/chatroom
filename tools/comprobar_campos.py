@@ -40,6 +40,9 @@ MIXINS = {
 def modelos_del_modulo(raiz):
     """{nombre del modelo: campos que declara} para los modelos PROPIOS."""
     modelos = {}
+    # Un modelo propio ampliado en otro fichero (solo `_inherit`, sin
+    # `_name`): sus campos se suman al final, cuando ya se conocen todos.
+    ampliaciones = []
     for py in sorted((raiz / "models").glob("*.py")):
         for n in ast.walk(ast.parse(py.read_text())):
             if not isinstance(n, ast.ClassDef):
@@ -72,6 +75,11 @@ def modelos_del_modulo(raiz):
                 for m in mix:
                     campos |= MIXINS.get(m, set())
                 modelos[nombre] = campos
+            elif len(mix) == 1:
+                ampliaciones.append((mix[0], campos))
+    for nombre, campos in ampliaciones:
+        if nombre in modelos:
+            modelos[nombre] |= campos
     return modelos
 
 

@@ -6,6 +6,12 @@ alguien que no ha escrito en 24 horas Meta exige una plantilla, sea la que
 sea. Dentro de las 24 horas no hace falta: basta con abrir la conversación y
 escribir.
 
+DESDE CUALQUIER FICHA (26-11-2026): «Enviar WhatsApp» en el menú Acción de
+los modelos a los que se aplica alguna plantilla abre esto mismo con la
+ficha (`res_model`, `res_id`). El contacto sale de la ficha (o de su
+`partner_id`), el número del «Campo del teléfono» de la plantilla y los
+datos de sus campos. Queda una nota en el historial de la ficha.
+
 La plantilla se publica en la conversación como un mensaje más del operador,
 con `alma_plantilla_id` y `alma_parametros`: sale por el mismo camino que lo
 que se escribe a mano (después del commit, con su acuse, su estado y su
@@ -21,6 +27,7 @@ from odoo.exceptions import UserError
 from odoo.tools import plaintext2html
 
 from .gts_chatroom_comunicado import pista_y_ejemplo
+from .gts_chatroom_plantilla_alta import valor_de_campo
 from .mail_gateway_alma import _digitos
 
 VENTANA = timedelta(hours=24)
@@ -40,16 +47,29 @@ class GtsChatroomNueva(models.TransientModel):
         ],
         default=lambda self: self.env["res.partner"]._gts_pasarelas_alma()[:1],
     )
-    partner_id = fields.Many2one("res.partner", "Contacto", required=True)
-    telefono = fields.Char("Se le escribe al", compute="_compute_conversacion")
+    # Sin readonly: un campo de solo lectura no viaja al guardar el diálogo.
+    res_model = fields.Char()
+    res_id = fields.Integer()
+    registro_nombre = fields.Char("Desde", compute="_compute_registro_nombre")
+    partner_id = fields.Many2one("res.partner", "Contacto")
+    telefono = fields.Char(
+        "Se le escribe al",
+        compute="_compute_telefono",
+        store=True,
+        readonly=False,
+        help="Con el prefijo del país. Sale de la ficha; se puede cambiar.",
+    )
     canal_id = fields.Many2one(
         "discuss.channel", "Conversación", compute="_compute_conversacion"
     )
     ventana_abierta = fields.Boolean(compute="_compute_conversacion")
+    plantilla_permitida_ids = fields.Many2many(
+        "gts.chatroom.plantilla", compute="_compute_plantilla_permitida_ids"
+    )
     plantilla_id = fields.Many2one(
         "gts.chatroom.plantilla",
         "Plantilla",
-        domain="[('gateway_id', '=', gateway_id), ('se_puede_enviar', '=', True)]",
+        domain="[('id', 'in', plantilla_permitida_ids)]",
     )
     categoria_texto = fields.Char(related="plantilla_id.categoria_texto")
     variables = fields.Integer(related="plantilla_id.variables_cuerpo")
@@ -57,12 +77,70 @@ class GtsChatroomNueva(models.TransientModel):
     dato_ids = fields.One2many("gts.chatroom.nueva.dato", "nueva_id", "Datos")
     vista_previa = fields.Text("Así llegará", compute="_compute_vista_previa")
 
-    @api.depends("partner_id", "gateway_id")
+    @api.model
+    def default_get(self, fields_list):
+        res = super().default_get(fields_list)
+        contexto = self.env.context
+        if contexto.get("gts_desde_registro") and contexto.get("active_model"):
+            res["res_model"] = contexto["active_model"]
+            res["res_id"] = contexto.get("active_id") or 0
+            registro = self._gts_registro_de(res["res_model"], res["res_id"])
+            if registro._name == "res.partner":
+                res["partner_id"] = registro.id
+            elif "partner_id" in registro._fields and registro.partner_id:
+                res["partner_id"] = registro.partner_id[:1].id
+        return res
+
+    @api.model
+    def _gts_registro_de(self, modelo, res_id):
+        if not modelo or modelo not in self.env or not res_id:
+            return self.env["res.partner"]
+        return self.env[modelo].browse(res_id).exists()
+
+    def _gts_registro(self):
+        """La ficha desde la que se manda; si se manda desde Chats, el
+        contacto."""
+        self.ensure_one()
+        return self._gts_registro_de(self.res_model, self.res_id) or self.partner_id
+
+    @api.depends("res_model", "res_id")
+    def _compute_registro_nombre(self):
+        for nueva in self:
+            registro = nueva._gts_registro_de(nueva.res_model, nueva.res_id)
+            nueva.registro_nombre = registro.display_name if registro else False
+
+    @api.depends("gateway_id", "res_model")
+    def _compute_plantilla_permitida_ids(self):
+        Plantilla = self.env["gts.chatroom.plantilla"]
+        for nueva in self:
+            dominio = [
+                ("gateway_id", "=", nueva.gateway_id.id),
+                ("se_puede_enviar", "=", True),
+            ]
+            if nueva.res_model:
+                dominio += [
+                    "|",
+                    ("model_id", "=", False),
+                    ("model_id.model", "=", nueva.res_model),
+                ]
+            nueva.plantilla_permitida_ids = Plantilla.search(dominio)
+
+    @api.depends("partner_id", "plantilla_id", "res_model", "res_id")
+    def _compute_telefono(self):
+        for nueva in self:
+            registro = nueva._gts_registro()
+            crudo = ""
+            if registro and nueva.plantilla_id.campo_telefono and nueva.res_model:
+                crudo = valor_de_campo(registro, nueva.plantilla_id.campo_telefono)
+            if not crudo:
+                crudo = nueva.partner_id.phone_sanitized or nueva.partner_id.phone
+            formateado = crudo and (registro or nueva)._phone_format(number=crudo)
+            nueva.telefono = formateado or crudo or False
+
+    @api.depends("partner_id", "gateway_id", "telefono")
     def _compute_conversacion(self):
         Mensaje = self.env["mail.message"].sudo()
         for nueva in self:
-            telefono = _digitos(nueva.partner_id.phone_sanitized)
-            nueva.telefono = f"+{telefono}" if telefono else False
             canal = nueva._gts_buscar_canal()
             nueva.canal_id = canal
             nueva.ventana_abierta = bool(
@@ -79,24 +157,26 @@ class GtsChatroomNueva(models.TransientModel):
             )
 
     def _gts_token(self):
-        return _digitos(self.partner_id.phone_sanitized)
+        return _digitos(self.telefono) or _digitos(self.partner_id.phone_sanitized)
 
     def _gts_buscar_canal(self):
         """La conversación que ya hay con este contacto por este canal: por
         su enlace con la pasarela o por su teléfono."""
-        if not self.gateway_id or not self.partner_id:
+        if not self.gateway_id or not (self.partner_id or self.telefono):
             return self.env["discuss.channel"]
-        tokens = set(
-            self.env["res.partner.gateway.channel"]
-            .sudo()
-            .search(
-                [
-                    ("gateway_id", "=", self.gateway_id.id),
-                    ("partner_id", "=", self.partner_id.id),
-                ]
+        tokens = set()
+        if self.partner_id and not self.telefono:
+            tokens = set(
+                self.env["res.partner.gateway.channel"]
+                .sudo()
+                .search(
+                    [
+                        ("gateway_id", "=", self.gateway_id.id),
+                        ("partner_id", "=", self.partner_id.id),
+                    ]
+                )
+                .mapped("gateway_token")
             )
-            .mapped("gateway_token")
-        )
         if self._gts_token():
             tokens.add(self._gts_token())
         if not tokens:
@@ -115,10 +195,20 @@ class GtsChatroomNueva(models.TransientModel):
 
     @api.onchange("plantilla_id")
     def _onchange_plantilla_datos(self):
-        self.dato_ids = [(5, 0, 0)] + [
-            (0, 0, {"posicion": n})
-            for n in range(1, (self.plantilla_id.variables_cuerpo or 0) + 1)
-        ]
+        """Una casilla por dato, ya rellena con el campo de la ficha o con
+        el texto por defecto de la plantilla."""
+        registro = self._gts_registro()
+        por_posicion = {v.posicion: v for v in self.plantilla_id.variable_ids}
+        comandos = [(5, 0, 0)]
+        for n in range(1, (self.plantilla_id.variables_cuerpo or 0) + 1):
+            variable = por_posicion.get(n)
+            valor = ""
+            if variable and variable.origen == "campo" and registro:
+                valor = valor_de_campo(registro, variable.campo)
+            elif variable:
+                valor = variable.por_defecto or ""
+            comandos.append((0, 0, {"posicion": n, "valor": valor}))
+        self.dato_ids = comandos
 
     def _lista_parametros(self):
         return [(d.valor or "").strip() for d in self.dato_ids.sorted("posicion")]
@@ -148,18 +238,33 @@ class GtsChatroomNueva(models.TransientModel):
             if not token:
                 raise UserError(
                     self.env._(
-                        "%s no tiene un teléfono válido. Ponle el móvil con el "
-                        "prefijo del país en su ficha.",
-                        self.partner_id.display_name,
+                        "No hay un teléfono válido al que escribir. Ponlo con el "
+                        "prefijo del país, por ejemplo +34 y el móvil."
                     )
                 )
             # El enlace primero: así la conversación es de ESTE contacto y no
-            # de otro con el mismo teléfono.
-            self.partner_id.accion_enlazar_whatsapp()
+            # de otro con el mismo teléfono. Sin contacto, la pasarela lo
+            # busca por el teléfono o lo crea (`_get_author`).
+            Enlace = self.env["res.partner.gateway.channel"].sudo()
+            if self.partner_id and not Enlace.search_count(
+                [
+                    ("gateway_id", "=", self.gateway_id.id),
+                    ("gateway_token", "=", token),
+                ],
+                limit=1,
+            ):
+                Enlace.create(
+                    {
+                        "partner_id": self.partner_id.id,
+                        "gateway_id": self.gateway_id.id,
+                        "gateway_token": token,
+                    }
+                )
+            nombre = self.partner_id.name or self.registro_nombre or f"+{token}"
             canal = self.env["mail.gateway.alma"]._get_channel(
                 self.gateway_id.sudo(),
                 token,
-                {"telefono": token, "nombre": self.partner_id.name},
+                {"telefono": token, "nombre": nombre},
                 force_create=True,
             )
         canal = canal.sudo()
@@ -177,7 +282,11 @@ class GtsChatroomNueva(models.TransientModel):
     def accion_abrir(self):
         """Solo abrir la conversación, para escribir dentro de las 24 h."""
         self.ensure_one()
-        return self._gts_cerrar_y_abrir(self._gts_preparar_canal())
+        canal = self._gts_preparar_canal()
+        if self.res_model:
+            # Desde una ficha: se va a la conversación, en Chats.
+            return canal.action_alma_abrir()
+        return self._gts_cerrar_y_abrir(canal)
 
     def accion_enviar(self):
         self.ensure_one()
@@ -219,7 +328,33 @@ class GtsChatroomNueva(models.TransientModel):
             alma_plantilla_id=plantilla.id,
             alma_parametros=valores,
         )
-        return self._gts_cerrar_y_abrir(canal)
+        registro = self._gts_registro_de(self.res_model, self.res_id)
+        if not registro:
+            return self._gts_cerrar_y_abrir(canal)
+        if hasattr(registro, "message_post"):
+            # Que en la ficha quede que se le escribió, y con qué.
+            registro.message_post(
+                body=Markup("<p>%s</p>")
+                % self.env._(
+                    "WhatsApp enviado al %(tel)s con la plantilla «%(p)s».",
+                    tel=self.telefono or "",
+                    p=plantilla.name,
+                )
+                + plaintext2html(self.vista_previa or ""),
+                message_type="comment",
+                subtype_xmlid="mail.mt_note",
+            )
+        return {
+            "type": "ir.actions.client",
+            "tag": "display_notification",
+            "params": {
+                "type": "success",
+                "message": self.env._(
+                    "Enviado. La conversación está en el ChatRoom, en Chats."
+                ),
+                "next": {"type": "ir.actions.act_window_close"},
+            },
+        }
 
 
 class GtsChatroomNuevaDato(models.TransientModel):

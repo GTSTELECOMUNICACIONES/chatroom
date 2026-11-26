@@ -13,3 +13,4 @@ from . import gts_chatroom_canal
 from . import gts_chatroom_nueva
 from . import ir_http
 from . import gts_chatroom_pasar
+from . import gts_chatroom_plantilla_alta
