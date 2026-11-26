@@ -34,16 +34,25 @@
                     <div class="text-muted small mb-3">
                         El icono es un solo emoji. Para escribirlo: tecla Windows + punto en Windows, Control + Comando + espacio en Mac.
                     </div>
-                    <group name="buzon">
-                        <group name="canales" string="Canales">
-                            <field name="canal_ids" nolabel="1" colspan="2" widget="many2many_tags" options="{'no_create': True}" />
-                            <div colspan="2" class="text-muted small">Cada canal está en un solo buzón: al añadirlo aquí, sale del que estaba.</div>
-                        </group>
-                        <group name="operadores" string="Quién lo atiende">
-                            <field name="usuario_ids" nolabel="1" colspan="2" widget="many2many_avatar_user" options="{'no_create': True}" />
-                            <div colspan="2" class="text-muted small">Solo estas personas ven sus conversaciones, también al buscar. Quien sale, deja de verlas al momento.</div>
-                        </group>
-                    </group>
+                    <!-- Como en Superchat: arriba los canales, abajo quién
+                         entra (David, 26-11-2026). -->
+                    <h3 class="mt-3">Canales</h3>
+                    <div class="text-muted small mb-2">Un canal de cada tipo: un WhatsApp, un Messenger… Al añadir uno aquí, sale del buzón en el que estaba.</div>
+                    <field name="canal_ids" options="{'no_create': True}">
+                        <list>
+                            <field name="canal_tipo" />
+                            <field name="name" />
+                            <field name="canal_numero" />
+                        </list>
+                    </field>
+                    <h3 class="mt-4">Quién entra en este buzón</h3>
+                    <div class="text-muted small mb-2">Solo estas personas ven sus conversaciones, también al buscar, y contestan desde él como operadores. Quien sale, deja de verlas al momento.</div>
+                    <field name="usuario_ids" options="{'no_create': True}">
+                        <list>
+                            <field name="name" />
+                            <field name="email" />
+                        </list>
+                    </field>
                 </sheet>
             </form>
         </field>

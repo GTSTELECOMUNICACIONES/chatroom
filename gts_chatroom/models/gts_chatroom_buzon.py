@@ -159,11 +159,24 @@ class GtsChatroomBuzon(models.Model):
             ).filtered(lambda u: not u.share and u.active)
             central.usuario_ids = [(4, u.id) for u in usuarios]
             Parametros.set_param("gts_chatroom.central_preparado", "1")
-        if sueltos:
-            # Sin `_gts_aplicar_buzon`: la primera vez cada canal se queda
-            # con los miembros que tenía; Central los incluye a todos.
-            sueltos.with_context(gts_sin_aplicar_buzon=True).write(
-                {"gts_buzon_id": central.id}
+        # Sin `_gts_aplicar_buzon`: la primera vez cada canal se queda con los
+        # miembros que tenía; Central los incluye a todos. UN CANAL DE CADA
+        # TIPO por buzón: el segundo WhatsApp va a un buzón propio, con su
+        # nombre y los mismos operadores, para no romper la actualización.
+        for canal in sueltos:
+            destino = central
+            if canal.canal_tipo and canal.canal_tipo in central.canal_ids.mapped(
+                "canal_tipo"
+            ):
+                destino = self.sudo().create(
+                    {
+                        "name": canal.name or canal.canal_etiqueta,
+                        "icono": "📁",
+                        "usuario_ids": [(6, 0, central.usuario_ids.ids)],
+                    }
+                )
+            canal.with_context(gts_sin_aplicar_buzon=True).write(
+                {"gts_buzon_id": destino.id}
             )
         return True
 
@@ -233,6 +246,30 @@ class MailGateway(models.Model):
         if "gts_buzon_id" in vals and not self.env.context.get("gts_sin_aplicar_buzon"):
             self._gts_aplicar_buzon()
         return res
+
+    @api.constrains("gts_buzon_id", "canal_tipo")
+    def _comprobar_un_canal_de_cada_tipo(self):
+        """UN CANAL DE CADA TIPO POR BUZÓN (David, 26-11-2026, como en
+        Superchat): no dos WhatsApp ni dos Messenger en el mismo buzón. El
+        segundo número va en otro buzón."""
+        for canal in self.filtered(lambda g: g.gts_buzon_id and g.canal_tipo):
+            otros = canal.gts_buzon_id.canal_ids.filtered(
+                lambda g, c=canal: g != c and g.canal_tipo == c.canal_tipo
+            )
+            if otros:
+                raise ValidationError(
+                    self.env._(
+                        "El buzón %(b)s ya tiene un canal de %(t)s (%(o)s). En "
+                        "un buzón va un canal de cada tipo: pon %(c)s en otro "
+                        "buzón.",
+                        b=canal.gts_buzon_id.display_name,
+                        t=dict(canal._fields["canal_tipo"].selection).get(
+                            canal.canal_tipo, canal.canal_tipo
+                        ),
+                        o=otros[0].name,
+                        c=canal.name,
+                    )
+                )
 
     def _gts_aplicar_buzon(self):
         """Los operadores del buzón pasan a ser los del canal y los de sus
