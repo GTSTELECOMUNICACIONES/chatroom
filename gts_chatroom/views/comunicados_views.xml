@@ -96,6 +96,7 @@
                                     <field name="ejemplo" readonly="parent.alma_id and not parent.editable" />
                                     <field name="origen" />
                                     <field name="campo" widget="field_selector" options="{'model': 'modelo'}" invisible="origen != 'campo'" />
+                                    <field name="formato" invisible="origen != 'campo'" />
                                     <field name="por_defecto" invisible="origen != 'libre'" />
                                 </list>
                             </field>

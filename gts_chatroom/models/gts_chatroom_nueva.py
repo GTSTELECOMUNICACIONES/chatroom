@@ -28,7 +28,7 @@ from odoo.exceptions import UserError
 from odoo.tools import plaintext2html
 
 from .gts_chatroom_comunicado import pista_y_ejemplo
-from .gts_chatroom_plantilla_alta import valor_de_campo
+from .gts_chatroom_plantilla_alta import solo_nombre_de_pila, valor_de_campo
 from .mail_gateway_alma import _digitos
 
 VENTANA = timedelta(hours=24)
@@ -233,6 +233,8 @@ class GtsChatroomNueva(models.TransientModel):
             valor = ""
             if variable and variable.origen == "campo" and registro:
                 valor = valor_de_campo(registro, variable.campo)
+                if variable.formato == "nombre_pila":
+                    valor = solo_nombre_de_pila(registro, variable.campo, valor)
             elif variable:
                 valor = variable.por_defecto or ""
             comandos.append((0, 0, {"posicion": n, "valor": valor}))

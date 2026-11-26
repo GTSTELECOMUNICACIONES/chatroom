@@ -57,6 +57,24 @@ def nombre_meta(nombre):
     return re.sub(r"[^a-z0-9]+", "_", texto).strip("_")[:512]
 
 
+def solo_nombre_de_pila(registro, ruta, texto):
+    """«Antonio Jiménez Arellano» → «Antonio» (David, 26-11-2026: «Hola
+    Antonio Jiménez Arellano» no es como se le habla a nadie). Una EMPRESA
+    se queda entera: «Hola MARLON» no es mejor que «Hola MARLON KART S.L»."""
+    contacto = registro
+    for trozo in (ruta or "").split(".")[:-1]:
+        if not isinstance(contacto, models.BaseModel) or trozo not in contacto._fields:
+            break
+        contacto = contacto[:1][trozo]
+    if (
+        isinstance(contacto, models.BaseModel)
+        and contacto._name == "res.partner"
+        and contacto[:1].is_company
+    ):
+        return texto
+    return (texto or "").split(" ")[0]
+
+
 def valor_de_campo(registro, ruta):
     """El valor de `partner_id.name` en un registro, como texto. Un campo
     que ya no existe da vacío, no un error al enviar."""
@@ -605,6 +623,14 @@ class GtsChatroomPlantillaVariable(models.Model):
     )
     campo = fields.Char("Campo", help="Por ejemplo «name» o «partner_id.name».")
     por_defecto = fields.Char("Texto por defecto")
+    formato = fields.Selection(
+        [("tal_cual", "Tal cual"), ("nombre_pila", "Solo el nombre de pila")],
+        "Cómo se pone",
+        default="tal_cual",
+        required=True,
+        help="«Solo el nombre de pila»: «Antonio» en vez de «Antonio Jiménez "
+        "Arellano». A una empresa se le pone el nombre entero.",
+    )
 
 
 class GtsChatroomPlantillaBoton(models.Model):
