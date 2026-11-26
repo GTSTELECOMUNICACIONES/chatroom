@@ -44,6 +44,7 @@
                 />
                 <field name="canal_numero" invisible="gateway_type != 'alma'" />
                 <field name="canal_etiqueta" invisible="gateway_type != 'alma'" />
+                <field name="alma_crear_contactos" invisible="gateway_type != 'alma'" />
                 <field
                     name="plantilla_inicio_id"
                     invisible="gateway_type != 'alma'"

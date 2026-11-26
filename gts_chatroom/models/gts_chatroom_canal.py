@@ -90,6 +90,13 @@ class MailGateway(models.Model):
         "nombre del canal.",
     )
     canal_etiqueta = fields.Char("Canal", compute="_compute_canal")
+    alma_crear_contactos = fields.Boolean(
+        "Crear contactos automáticamente",
+        default=False,
+        help="Apagado: quien escribe y no está en Contactos entra como "
+        "invitado, y se le hace ficha con «Nuevo contacto» desde la "
+        "conversación. Encendido: se crea un contacto por cada número nuevo.",
+    )
     plantilla_inicio_id = fields.Many2one(
         "gts.chatroom.plantilla",
         "Plantilla para empezar conversaciones",

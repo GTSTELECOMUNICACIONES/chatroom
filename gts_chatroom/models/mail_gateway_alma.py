@@ -253,15 +253,23 @@ class MailGatewayAlma(models.AbstractModel):
         if not body and not adjuntos:
             return
         autor = self._alma_autor_del_mensaje(gateway, evento)
+        donde = canal
+        if autor._name == "mail.guest":
+            # Un INVITADO (sin contacto en Odoo): Odoo pone de autor al
+            # invitado del contexto cuando quien publica es el usuario
+            # público. Así lo hace también la pasarela de WhatsApp de la OCA.
+            donde = canal.with_user(self.env.ref("base.public_user")).with_context(
+                guest=autor.sudo()
+            )
         # El controlador ya pone no_gateway_notification: lo que entra no se
         # vuelve a mandar. Al recuperar no pasa por el controlador, asi que se
         # pone aqui tambien.
         nuevo = (
-            canal.sudo()
+            donde.sudo()
             .with_context(no_gateway_notification=True, alma_entrante=True)
             .message_post(
                 body=body,
-                author_id=autor.id or False,
+                author_id=autor._name == "res.partner" and autor.id or False,
                 gateway_type="alma",
                 date=evento["fecha_mensaje"],
                 subtype_xmlid="mail.mt_comment",
@@ -343,6 +351,25 @@ class MailGatewayAlma(models.AbstractModel):
             _logger.warning("ChatRoom: origen desconocido %r, va como cliente", de)
         return self._get_author(gateway, evento) or self.env["res.partner"]
 
+    def _alma_invitado(self, gateway, telefono, nombre):
+        """Quien escribe y no está en Contactos entra como INVITADO, con su
+        nombre de WhatsApp y su teléfono, hasta que una persona decida
+        hacerle ficha («Nuevo contacto» en la conversación, de la OCA)."""
+        Invitado = self.env["mail.guest"].sudo()
+        invitado = Invitado.search(
+            [("gateway_id", "=", gateway.id), ("gateway_token", "=", telefono)],
+            limit=1,
+        )
+        if invitado:
+            return invitado
+        return Invitado.create(
+            {
+                "name": nombre or f"+{telefono}",
+                "gateway_id": gateway.id,
+                "gateway_token": telefono,
+            }
+        )
+
     def _alma_que_es(self, adjunto):
         # Sin la barra a proposito: /desde manda `mime: "image"` a secas, y el
         # webhook `image/jpeg`. `nombre` puede llegar null.
@@ -379,6 +406,12 @@ class MailGatewayAlma(models.AbstractModel):
             return enlace.partner_id
         Partner = self.env["res.partner"].sudo()
         partner = Partner.search([("phone_sanitized", "=", f"+{telefono}")], limit=1)
+        if not partner and not gateway.alma_crear_contactos:
+            # NO SE CREAN CONTACTOS SOLOS (David, 26-11-2026): por el canal
+            # entra de todo —curiosos, spam, gente que no vuelve— y llenaba
+            # Contactos de basura. Si el teléfono ya es de un contacto, se
+            # enlaza y se ve quién es; si no, entra como invitado.
+            return self._alma_invitado(gateway, telefono, update.get("nombre"))
         if not partner:
             partner = Partner.create(
                 {

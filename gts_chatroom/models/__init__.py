@@ -15,3 +15,4 @@ from . import ir_http
 from . import gts_chatroom_pasar
 from . import gts_chatroom_plantilla_alta
 from . import gts_chatroom_operadores
+from . import mail_guest_manage
