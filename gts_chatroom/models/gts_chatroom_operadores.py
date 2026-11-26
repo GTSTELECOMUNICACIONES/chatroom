@@ -19,29 +19,26 @@ commit, y una vez al día como red: lo rápido puede fallar, lo lento no.
 
 import logging
 
-from odoo import api, fields, models
+from odoo import api, models
 
 _logger = logging.getLogger(__name__)
 
-CAMPOS_DEL_OPERADOR = {"name", "email", "login", "active", "gts_chatroom_nombres"}
+CAMPOS_DEL_OPERADOR = {"name", "email", "login", "active"}
+
+# NUNCA UN CAMPO GUARDADO EN res.users (26-11-2026). La 0.15.0 añadió
+# `gts_chatroom_nombres` aquí: COPYE hizo el pull sin actualizar y la web
+# entera dio 500, porque Odoo lee res_users en CADA petición y la columna no
+# existía. Un campo nuevo en un modelo que se lee siempre (usuarios,
+# contactos, compañía) convierte «pull sin actualizar» en caída total. Los
+# nombres para los clientes, si hacen falta, en un modelo propio.
 
 
 class ResUsers(models.Model):
     _inherit = "res.users"
 
-    gts_chatroom_nombres = fields.Char(
-        "Cómo le llaman los clientes",
-        help="Separados por comas, como lo escribiría un cliente por WhatsApp: "
-        "«David, David Fernández». Vacío: el nombre de pila y el completo.",
-    )
-
     def _gts_nombres_para_clientes(self):
+        """El nombre de pila y el completo: «David», «David Fernández»."""
         self.ensure_one()
-        escritos = [
-            n.strip() for n in (self.gts_chatroom_nombres or "").split(",") if n.strip()
-        ]
-        if escritos:
-            return escritos
         completo = (self.name or "").strip()
         pila = completo.split(" ")[0] if completo else ""
         return [n for n in dict.fromkeys([pila, completo]) if n]
