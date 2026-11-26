@@ -601,6 +601,9 @@ class DiscussChannel(models.Model):
         self.ensure_one()
         return {
             "type": "ir.actions.act_url",
-            "url": f"/odoo/action-mail.action_discuss?active_id={self.id}",
+            # En Chats del ChatRoom, no en las conversaciones de Odoo.
+            "url": (
+                f"/odoo/action-gts_chatroom.action_chatroom_chats?active_id={self.id}"
+            ),
             "target": "self",
         }

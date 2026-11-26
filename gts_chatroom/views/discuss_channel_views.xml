@@ -244,4 +244,34 @@
         <field name="view_id" ref="discuss_channel_alma_kanban" />
         <field name="act_window_id" ref="discuss_channel_alma_esperando_action" />
     </record>
+
+    <!-- EL HISTÓRICO DE RESUELTAS (David, 26-11-2026): al resolverse salen
+         del lateral, pero un supervisor tiene que poder buscarlas por el
+         nombre o el teléfono, por calidad. Se abre desde el apartado
+         «Resueltas» de Chats y desde Conversaciones. -->
+    <record id="action_chatroom_resueltas" model="ir.actions.act_window">
+        <field name="name">Resueltas</field>
+        <field name="res_model">discuss.channel</field>
+        <field name="view_mode">list,kanban</field>
+        <field name="search_view_id" ref="discuss_channel_alma_search" />
+        <field
+            name="domain"
+        >[('alma_es', '=', True), ('alma_cola', '=', 'resuelta')]</field>
+        <field name="help" type="html">
+            <p class="o_view_nocontent_smiling_face">Todavía no hay conversaciones resueltas.</p>
+            <p>Aquí quedan todas las que se han cerrado. Búscalas por el nombre o el teléfono.</p>
+        </field>
+    </record>
+    <record id="action_chatroom_resueltas_list" model="ir.actions.act_window.view">
+        <field name="sequence">1</field>
+        <field name="view_mode">list</field>
+        <field name="view_id" ref="discuss_channel_alma_list" />
+        <field name="act_window_id" ref="action_chatroom_resueltas" />
+    </record>
+    <record id="action_chatroom_resueltas_kanban" model="ir.actions.act_window.view">
+        <field name="sequence">2</field>
+        <field name="view_mode">kanban</field>
+        <field name="view_id" ref="discuss_channel_alma_kanban" />
+        <field name="act_window_id" ref="action_chatroom_resueltas" />
+    </record>
 </odoo>

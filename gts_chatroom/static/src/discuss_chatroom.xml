@@ -38,4 +38,14 @@
         </div>
     </t>
 
+    <!-- Contador y bolita roja en la bandeja de entrada del lateral. -->
+    <t t-inherit="mail.DiscussSidebarCategory.main" t-inherit-mode="extension">
+        <xpath expr="//t[@name='titleText']" position="after">
+            <t t-if="gtsPendientes">
+                <span class="ms-1 fw-bold text-danger">(<t t-esc="gtsPendientes"/>)</span>
+                <span class="o-gts-Buzon-bolita ms-2" role="presentation" title="Hay conversaciones sin atender"/>
+            </t>
+        </xpath>
+    </t>
+
 </templates>

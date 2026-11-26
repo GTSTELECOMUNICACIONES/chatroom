@@ -8,7 +8,10 @@ import {
     DiscussSidebar,
     discussSidebarItemsRegistry,
 } from "@mail/core/public_web/discuss_sidebar";
-import { DiscussSidebarCategories } from "@mail/discuss/core/public_web/discuss_sidebar_categories";
+import {
+    DiscussSidebarCategories,
+    DiscussSidebarCategory,
+} from "@mail/discuss/core/public_web/discuss_sidebar_categories";
 import { DiscussAppCategory } from "@mail/discuss/core/public_web/discuss_app_category_model";
 import { compareDatetime } from "@mail/utils/common/misc";
 import { browser } from "@web/core/browser/browser";
@@ -65,10 +68,12 @@ function delBuzon(thread) {
 
 // (id del apartado, nombre, icono). El orden es el de la pantalla.
 const APARTADOS = [
-    ["gts_esperando", _t("Sin atender"), "fa fa-hourglass-half"],
+    // La BANDEJA DE ENTRADA: donde entra todo lo que nadie ha cogido
+    // (David, 26-11-2026). Siempre abierta, con contador y bolita.
+    ["gts_esperando", _t("Bandeja de entrada (sin atender)"), "fa fa-inbox"],
     ["gts_mias", _t("Para mí"), "fa fa-user"],
     ["gts_contestada", _t("Contestadas sin asignar"), "fa fa-reply"],
-    ["gts_otros", _t("Con otros operadores"), "fa fa-users"],
+    ["gts_otros", _t("Atendidas por compañeros"), "fa fa-users"],
     ["gts_ia", _t("Atendidos por la IA"), "fa fa-magic"],
     ["gts_resuelta", _t("Resueltas"), "fa fa-check"],
 ];
@@ -137,6 +142,15 @@ patch(DiscussApp.prototype, {
 });
 
 patch(DiscussAppCategory.prototype, {
+    get open() {
+        // La bandeja de entrada no se puede plegar: lo que espera, se ve.
+        return this.id === "gts_esperando" ? true : super.open;
+    },
+    set open(value) {
+        if (this.id !== "gts_esperando") {
+            super.open = value;
+        }
+    },
     get isVisible() {
         if (vista.soloChatroom && !esNuestro(this.id)) {
             return false;
@@ -184,6 +198,31 @@ patch(DiscussSidebar.prototype, {
             .getEntries()
             .filter(([clave]) => clave !== "mailbox")
             .map(([, item]) => item);
+    },
+});
+
+patch(DiscussSidebarCategory.prototype, {
+    /** Las que esperan en la bandeja de entrada (del buzón elegido). */
+    get gtsPendientes() {
+        if (this.category.id !== "gts_esperando") {
+            return 0;
+        }
+        return this.category.threads.filter((t) => t.displayInSidebar && delBuzon(t))
+            .length;
+    },
+    get actions() {
+        const actions = super.actions;
+        if (this.category.id === "gts_resuelta") {
+            // El histórico entero, con buscador: al resolverse salen del
+            // lateral, pero hay que poder encontrarlas (calidad).
+            actions.push({
+                onSelect: () =>
+                    this.env.services.action.doAction("gts_chatroom.action_chatroom_resueltas"),
+                label: _t("Histórico de resueltas: buscar por nombre o teléfono"),
+                icon: "fa fa-history",
+            });
+        }
+        return actions;
     },
 });
 
@@ -399,9 +438,11 @@ threadActionsRegistry
     .add("gts-pasar", {
         condition: ({ owner, thread }) =>
             esDelPortal(owner, thread) && thread.gts_cola !== "resuelta",
-        icon: "fa fa-fw fa-share",
-        iconLarge: "fa fa-fw fa-lg fa-share",
-        name: _t("Pasar a otra persona"),
+        // Persona con flecha: «transferir a un compañero», como en las
+        // centralitas.
+        icon: "fa fa-fw fa-user-plus",
+        iconLarge: "fa fa-fw fa-lg fa-user-plus",
+        name: _t("Pasar a otro operador"),
         async open({ owner, thread }) {
             const accion = await owner.env.services.orm.call(
                 "discuss.channel",
