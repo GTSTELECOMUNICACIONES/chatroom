@@ -99,7 +99,14 @@ class GtsChatroomPlantillaAlta(models.Model):
         "ir.model",
         "Aplica a",
         ondelete="set null",
-        domain=[("transient", "=", False)],
+        # Las fichas de negocio con historial (contactos, oportunidades,
+        # pedidos…), no las tablas internas del propio ChatRoom.
+        domain=[
+            ("transient", "=", False),
+            ("is_mail_thread", "=", True),
+            ("model", "not like", "gts.chatroom"),
+            ("model", "not in", ["discuss.channel", "mail.gateway"]),
+        ],
         default=lambda self: self.env.ref("base.model_res_partner"),
         help="Desde qué fichas se puede mandar. Sus campos sirven para "
         "rellenar los datos.",
