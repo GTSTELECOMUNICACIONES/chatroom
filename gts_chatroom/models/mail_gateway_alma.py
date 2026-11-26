@@ -795,6 +795,36 @@ class MailGatewayAlma(models.AbstractModel):
         if datos.get("conversacion_id") and not canal.alma_conversacion_id:
             canal.sudo().alma_conversacion_id = str(datos["conversacion_id"])
         record.mail_message_id._notify_message_notification_update()
+        self._alma_quedarsela_quien_empieza(record)
+
+    def _alma_quedarsela_quien_empieza(self, record):
+        """LA CONVERSACIÓN QUE EMPIEZA UN OPERADOR ES SUYA (David,
+        26-11-2026): con una plantilla desde «Nueva conversación», el portal
+        la abría con la IA y salía en «Atendidos por la IA». Ya aceptada la
+        plantilla y con su `conversacion_id`, se pide el relevo a una persona,
+        asignado a quien la mandó. Si falla, se queda como estaba: nunca
+        puede deshacer un envío que ya salió."""
+        mensaje = record.mail_message_id
+        canal = record.gateway_channel_id.sudo()
+        usuario = mensaje.author_id.user_ids.filtered(lambda u: not u.share)[:1]
+        if (
+            not mensaje.alma_plantilla_id
+            or not usuario
+            or not canal.alma_conversacion_id
+            or canal.alma_cola == "asignada"
+        ):
+            return
+        try:
+            with self.env.cr.savepoint():
+                canal.with_user(usuario).with_context(
+                    gts_desde_chats=True
+                )._alma_cambiar_relevo("humano")
+        except Exception:  # noqa: BLE001 - el envío ya salió; esto es un extra
+            _logger.warning(
+                "ChatRoom: no se pudo asignar %s a quien la empezó",
+                canal.id,
+                exc_info=True,
+            )
 
     def _alma_marcar_fallido(self, record, texto):
         record.sudo().write(
