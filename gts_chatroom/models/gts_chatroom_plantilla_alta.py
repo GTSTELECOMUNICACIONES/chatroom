@@ -77,7 +77,10 @@ class GtsChatroomPlantillaAlta(models.Model):
     gateway_id = fields.Many2one(
         default=lambda self: self.env["res.partner"]._gts_pasarelas_alma()[:1]
     )
-    creada_en_odoo = fields.Boolean(readonly=True, copy=False)
+    # Por defecto SÍ: una ficha nueva en pantalla es un borrador de Odoo y
+    # tiene que poder escribirse ANTES de guardar (el 26-11-2026 salía todo
+    # bloqueado). Lo que copia el portal lo pone a False en `create`.
+    creada_en_odoo = fields.Boolean(default=True, readonly=True, copy=False)
     editable = fields.Boolean(compute="_compute_editable")
     categoria_alta = fields.Selection(
         CATEGORIAS_ALTA,
@@ -172,6 +175,8 @@ class GtsChatroomPlantillaAlta(models.Model):
                 # duplicar una rechazada para corregirla).
                 vals["creada_en_odoo"] = True
                 vals.update(estado="borrador", motivo=False, se_puede_enviar=False)
+            else:
+                vals.setdefault("creada_en_odoo", False)
             self._valores_de_alta(vals)
         plantillas = super().create(vals_list)
         plantillas._ajustar_variables()

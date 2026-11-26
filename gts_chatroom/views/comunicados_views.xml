@@ -44,7 +44,7 @@
                         Meta la ha reclasificado: se cobra y se trata como <field name="categoria_texto" class="fw-bold" readonly="1" />.
                     </div>
                     <div class="alert alert-info" role="status" invisible="alma_id">
-                        Borrador: escribe la plantilla, pon un ejemplo a cada dato y pulsa «Enviar para aprobación». Meta suele contestar en minutos.
+                        Borrador. Obligatorio: nombre, categoría, idioma y texto, y un ejemplo para cada {{dato}} del texto (pestaña «Datos»). Opcional: cabecera, pie y botones. Al guardar, pulsa «Enviar para aprobación»: Meta suele contestar en minutos y puede cambiar la categoría; la que quede es la que se cobra.
                     </div>
                     <label for="name" string="Nombre" />
                     <h1><field name="name" readonly="not editable" placeholder="p. ej. Recordatorio de clase" /></h1>
@@ -52,9 +52,9 @@
                     <group name="principal_1">
                         <group name="meta">
                             <field name="gateway_id" readonly="alma_id" options="{'no_create': True, 'no_open': True}" />
-                            <field name="categoria_alta" invisible="not editable" />
+                            <field name="categoria_alta" invisible="not editable" required="editable" />
                             <field name="categoria_texto" invisible="editable" />
-                            <field name="idioma_alta" invisible="not editable" />
+                            <field name="idioma_alta" invisible="not editable" required="editable" />
                             <field name="idioma" invisible="editable" />
                             <field name="alma_id" invisible="1" />
                         </group>
@@ -68,9 +68,9 @@
                     <notebook>
                         <page name="texto" string="Texto">
                             <group name="texto">
-                                <field name="cabecera" readonly="not editable" placeholder="Opcional, hasta 60 caracteres y sin datos" />
-                                <field name="cuerpo" readonly="not editable" widget="text" placeholder="Hola {{1}}, te recordamos tu clase del {{2}}. Si no puedes venir, avísanos." />
-                                <field name="pie" readonly="not editable" placeholder="Opcional, hasta 60 caracteres" />
+                                <field name="cabecera" readonly="not editable" placeholder="(opcional) Hasta 60 caracteres, sin {{datos}}" />
+                                <field name="cuerpo" readonly="not editable" required="editable" widget="text" placeholder="Hola {{1}}, te recordamos tu clase del {{2}}. Si no puedes venir, avísanos." />
+                                <field name="pie" readonly="not editable" placeholder="(opcional) Hasta 60 caracteres, sin {{datos}}" />
                             </group>
                         </page>
                         <page name="datos" string="Datos" invisible="not variables_cuerpo">
@@ -86,7 +86,7 @@
                                 </list>
                             </field>
                         </page>
-                        <page name="botones" string="Botones">
+                        <page name="botones" string="Botones (opcional)">
                             <field name="boton_ids" readonly="not editable">
                                 <list editable="bottom">
                                     <field name="sequence" widget="handle" />

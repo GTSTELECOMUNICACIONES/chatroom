@@ -83,6 +83,9 @@ class GtsChatroomPlantilla(models.Model):
     @api.depends("name", "categoria", "variables_cuerpo")
     def _compute_display_name(self):
         for plantilla in self:
+            if not plantilla.name:
+                plantilla.display_name = self.env._("Nueva plantilla")
+                continue
             plantilla.display_name = (
                 f"{plantilla.name} ({plantilla.categoria_texto or '?'})"
             )
