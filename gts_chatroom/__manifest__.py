@@ -16,7 +16,7 @@ queda.
 La direccion del portal y las claves van en la ficha de la pasarela, nunca en
 el codigo: el repositorio es publico.
 """,
-    "version": "19.0.0.7.0",
+    "version": "19.0.0.8.0",
     "category": "Discuss",
     "author": "GTS Telecomunicaciones",
     "website": "https://github.com/GTSTELECOMUNICACIONES/chatroom",
@@ -34,12 +34,14 @@ el codigo: el repositorio es publico.
         "views/comunicados_views.xml",
         "views/res_partner_views.xml",
         "views/chats_views.xml",
+        "views/nueva_conversacion_views.xml",
         "views/menus.xml",
         "data/bandejas_data.xml",
     ],
     "assets": {
         "web.assets_backend": [
             "gts_chatroom/static/src/discuss_chatroom.js",
+            "gts_chatroom/static/src/discuss_chatroom.xml",
         ],
     },
     "application": True,

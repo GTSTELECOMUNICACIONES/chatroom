@@ -6,6 +6,8 @@ from markupsafe import Markup
 from odoo import api, fields, models
 from odoo.exceptions import UserError
 
+from odoo.addons.mail.tools.discuss import Store
+
 RELEVO = [
     ("ia", "La IA"),
     ("humano", "Una persona"),
@@ -199,6 +201,7 @@ class DiscussChannel(models.Model):
                 "alma_estado_en": emitido_en,
             }
         )
+        self._gts_avisar_cola()
         # «Esperando desde» se fija al ENTRAR en espera y no se mueve con cada
         # mensaje: la cola se ordena por cuanto lleva esperando.
         if self.alma_cola == "esperando" and antes != "esperando":
@@ -208,6 +211,43 @@ class DiscussChannel(models.Model):
         elif self.alma_cola != "esperando":
             self.sudo().alma_esperando_desde = False
             self._alma_cerrar_aviso()
+
+    # ------------------------------------------------------------------
+    # La cola en la pantalla de Chats (David, 26-11-2026)
+    # ------------------------------------------------------------------
+
+    def _gts_datos_cola(self):
+        """Lo que necesita el lateral de Chats para poner la conversación en
+        su apartado. «Para mí» lo decide el navegador comparando
+        `gts_asignado_a` con el correo del usuario (`ir.http`): este mismo
+        dato viaja por el bus a todos los miembros y no puede llevar «mía»."""
+        self.ensure_one()
+        return {
+            "id": self.id,
+            "gts_cola": self.alma_cola or False,
+            "gts_asignado_a": (self.alma_asignado_a or "").lower() or False,
+        }
+
+    def _to_store(self, store: Store, fields):
+        res = super()._to_store(store, fields)
+        for canal in self.filtered("alma_es"):
+            store.add_model_values(self._name, canal._gts_datos_cola())
+        return res
+
+    def _gts_avisar_cola(self):
+        """La conversación cambia de apartado en el lateral sin recargar."""
+        for canal in self.filtered("alma_es"):
+            Store(bus_channel=canal).add_model_values(
+                canal._name, canal._gts_datos_cola()
+            ).bus_send()
+
+    def _get_message_create_valid_field_names(self):
+        # Una plantilla se publica como un mensaje más de la conversación
+        # (gts.chatroom.nueva): `_send` la manda como plantilla.
+        return super()._get_message_create_valid_field_names() | {
+            "alma_plantilla_id",
+            "alma_parametros",
+        }
 
     # ------------------------------------------------------------------
     # Los botones de la cola
@@ -304,7 +344,14 @@ class DiscussChannel(models.Model):
             subtype_xmlid="mail.mt_note",
         )
         if relevo == "humano":
+            # Coger la conversación es unirse a ella: aparece en «Para mí»
+            # aunque no fuera miembro.
+            self.sudo()._add_members(users=usuario, post_joined_message=False)
+            if self.env.context.get("gts_desde_chats"):
+                return False
             return self.action_alma_abrir()
+        if self.env.context.get("gts_desde_chats"):
+            return False
         return {"type": "ir.actions.client", "tag": "soft_reload"}
 
     def _compute_alma_ultimo_cliente(self):

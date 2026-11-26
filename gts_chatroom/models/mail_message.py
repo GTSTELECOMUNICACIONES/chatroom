@@ -23,3 +23,12 @@ class MailMessage(models.Model):
     # `mail.notification.gateway_message_id`, no aqui (desde 0.3.7).
     alma_mensaje_id = fields.Char(index="btree_not_null", readonly=True)
     alma_origen = fields.Selection(ORIGENES, readonly=True)
+
+    # UNA PLANTILLA DESDE LA CONVERSACIÓN (26-11-2026). Un mensaje que lleva
+    # plantilla sale por `/enviar` con `plantilla` y no con `texto`: fuera de
+    # las 24 horas Meta solo deja plantillas. El cuerpo es como quedó, para
+    # que se lea en la conversación.
+    alma_plantilla_id = fields.Many2one(
+        "gts.chatroom.plantilla", readonly=True, ondelete="set null"
+    )
+    alma_parametros = fields.Json(readonly=True)

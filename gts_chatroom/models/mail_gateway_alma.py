@@ -54,7 +54,7 @@ MOTIVOS = {
     "sin_saldo": "No queda saldo de WhatsApp en la cuenta. Hay que recargarla "
     "para seguir enviando.",
     "bloqueado": "El contacto ha bloqueado este numero.",
-    "baja_marketing": "El contacto se ha dado de baja de los mensajes " "comerciales.",
+    "baja_marketing": "El contacto se ha dado de baja de los mensajes comerciales.",
     "ventana_cerrada": "Han pasado mas de 24 horas desde el ultimo mensaje del "
     "cliente: WhatsApp solo deja enviarle una plantilla aprobada.",
     "plantilla_no_aprobada": "La plantilla no esta aprobada por Meta.",
@@ -624,11 +624,25 @@ class MailGatewayAlma(models.AbstractModel):
             raise MailDeliveryException(
                 self.env._("La pasarela %s no tiene la URL del portal.", gateway.name)
             )
+        mensaje = record.mail_message_id
+        plantilla = mensaje.alma_plantilla_id
         texto = html2plaintext(self._get_message_body(record) or "").strip()
-        if not texto:
+        if not texto and not plantilla:
             return False
         canal = record.gateway_channel_id
         dbuuid = self.env["ir.config_parameter"].sudo().get_param("database.uuid")
+        if plantilla:
+            # La plantilla puede haberse borrado o desactivado entre
+            # escribirla y enviarla; `alma_id` es lo único que el portal
+            # necesita y sigue en la ficha.
+            contenido = {
+                "plantilla": {
+                    "id": plantilla.sudo().alma_id,
+                    "parametros": list(mensaje.alma_parametros or []),
+                }
+            }
+        else:
+            contenido = {"texto": texto}
         return {
             # El id de la notificacion YA GUARDADA: tras el commit no hay
             # reintento que lo cambie, asi que la clave es estable.
@@ -637,8 +651,8 @@ class MailGatewayAlma(models.AbstractModel):
                 "numero": _digitos(gateway.alma_numero),
                 "conversacion_id": canal.alma_conversacion_id or None,
                 "a": canal.gateway_channel_token,
-                "texto": texto,
-                "operador": record.mail_message_id.author_id.name,
+                **contenido,
+                "operador": mensaje.author_id.name,
             },
         }
 

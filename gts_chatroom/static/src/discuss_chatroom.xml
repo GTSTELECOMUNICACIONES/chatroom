@@ -1,0 +1,13 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<templates xml:space="preserve">
+
+    <t t-name="gts_chatroom.NuevaConversacion">
+        <div t-if="visible" class="o-gts-NuevaConversacion mx-2 mb-2">
+            <button class="btn btn-primary btn-sm w-100 text-truncate" t-on-click="() => this.abrir()" title="Nueva conversación">
+                <i class="fa fa-plus" t-att-class="{ 'me-1': !store.discuss.isSidebarCompact }" role="presentation"/>
+                <t t-if="!store.discuss.isSidebarCompact">Nueva conversación</t>
+            </button>
+        </div>
+    </t>
+
+</templates>

@@ -10,3 +10,5 @@ from . import gts_chatroom_lista
 from . import gts_chatroom_comunicado
 from . import res_partner
 from . import gts_chatroom_canal
+from . import gts_chatroom_nueva
+from . import ir_http

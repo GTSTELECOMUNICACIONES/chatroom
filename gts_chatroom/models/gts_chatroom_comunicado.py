@@ -46,6 +46,43 @@ def _recorte(texto, largo, final=False):
     return texto[:largo].rsplit(" ", 1)[0] + "…"
 
 
+def pista_y_ejemplo(env, plantilla, posicion):
+    """Lo que rodea al dato en la plantilla, para saber qué escribir:
+    «…para este fin de semana: [1] … Apuntaos con tiempo…», y el ejemplo que
+    vio Meta para ese dato, si el portal lo separó. Las líneas que son solo
+    otro dato se saltan: no dicen nada. Lo usan el comunicado y la
+    conversación nueva."""
+    solo_dato = re.compile(r"^\{\{\d+\}\}$")
+    marca = f"{{{{{posicion}}}}}"
+    lineas = [
+        linea.strip()
+        for linea in (plantilla.cuerpo or "").splitlines()
+        if linea.strip()
+    ]
+    pista = ""
+    for i, linea in enumerate(lineas):
+        if marca not in linea:
+            continue
+        if not solo_dato.match(linea):
+            pista = linea.replace(marca, f"[{posicion}]")
+            break
+        antes = next((x for x in reversed(lineas[:i]) if not solo_dato.match(x)), "")
+        despues = next((x for x in lineas[i + 1 :] if not solo_dato.match(x)), "")
+        orden = sum(1 for x in lineas[:i] if solo_dato.match(x)) + 1
+        pista = env._(
+            "%(orden)sº bloque suelto después de «%(antes)s», antes de «%(despues)s»",
+            orden=orden,
+            antes=_recorte(antes, 60, final=True),
+            despues=_recorte(despues, 45),
+        )
+        break
+    ejemplos = plantilla.ejemplos or {}
+    ejemplo = (
+        str(ejemplos.get(str(posicion)) or "") if isinstance(ejemplos, dict) else ""
+    )
+    return pista[:200], ejemplo or False
+
+
 ESTADOS_DESTINATARIO = [
     ("pendiente", "Pendiente"),
     ("sin_telefono", "Sin teléfono válido"),
@@ -483,43 +520,7 @@ class GtsChatroomComunicadoDato(models.Model):
 
     @api.depends("posicion", "comunicado_id.plantilla_id.cuerpo")
     def _compute_pista(self):
-        """Lo que rodea al dato en la plantilla, para saber qué escribir:
-        «…para este fin de semana: [1] … Apuntaos con tiempo…». Las líneas
-        que son solo otro dato se saltan: no dicen nada."""
-        solo_dato = re.compile(r"^\{\{\d+\}\}$")
         for dato in self:
-            marca = f"{{{{{dato.posicion}}}}}"
-            lineas = [
-                linea.strip()
-                for linea in (dato.comunicado_id.plantilla_id.cuerpo or "").splitlines()
-                if linea.strip()
-            ]
-            pista = ""
-            for i, linea in enumerate(lineas):
-                if marca not in linea:
-                    continue
-                if not solo_dato.match(linea):
-                    pista = linea.replace(marca, f"[{dato.posicion}]")
-                    break
-                antes = next(
-                    (x for x in reversed(lineas[:i]) if not solo_dato.match(x)), ""
-                )
-                despues = next(
-                    (x for x in lineas[i + 1 :] if not solo_dato.match(x)), ""
-                )
-                orden = sum(1 for x in lineas[:i] if solo_dato.match(x)) + 1
-                pista = self.env._(
-                    "%(orden)sº bloque suelto después de «%(antes)s», antes de "
-                    "«%(despues)s»",
-                    orden=orden,
-                    antes=_recorte(antes, 60, final=True),
-                    despues=_recorte(despues, 45),
-                )
-                break
-            dato.pista = pista[:200]
-            ejemplos = dato.comunicado_id.plantilla_id.ejemplos or {}
-            dato.ejemplo = (
-                str(ejemplos.get(str(dato.posicion)) or "")
-                if isinstance(ejemplos, dict)
-                else ""
-            ) or False
+            dato.pista, dato.ejemplo = pista_y_ejemplo(
+                self.env, dato.comunicado_id.plantilla_id, dato.posicion
+            )
