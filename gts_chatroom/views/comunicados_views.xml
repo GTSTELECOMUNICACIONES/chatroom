@@ -86,6 +86,9 @@
                         </page>
                         <page name="datos" string="Datos" invisible="not variables_cuerpo">
                             <field name="variables_cuerpo" invisible="1" />
+                            <div class="text-muted small mb-2">
+                                En «Ejemplo para Meta» escribe solo lo que va en ese hueco, no la frase entera.
+                            </div>
                             <field name="variable_ids">
                                 <list editable="bottom" create="0" delete="0">
                                     <field name="modelo" column_invisible="1" />
@@ -96,6 +99,12 @@
                                     <field name="por_defecto" invisible="origen != 'libre'" />
                                 </list>
                             </field>
+                            <div class="alert alert-warning py-2 mt-2" role="alert" invisible="not aviso_ejemplos">
+                                Ojo: <field name="aviso_ejemplos" class="d-inline" />. Meta puede rechazarla por eso.
+                            </div>
+                            <group name="previa_meta" string="Así lo ve Meta">
+                                <field name="asi_lo_ve_meta" nolabel="1" colspan="2" />
+                            </group>
                         </page>
                         <page name="botones" string="Botones (opcional)">
                             <field name="boton_ids" readonly="not editable">

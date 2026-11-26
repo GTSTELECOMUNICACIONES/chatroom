@@ -126,6 +126,8 @@ class GtsChatroomPlantillaAlta(models.Model):
         "«partner_id.phone».",
     )
     datos_mal_escritos = fields.Char(compute="_compute_datos_mal_escritos")
+    asi_lo_ve_meta = fields.Text("Así lo ve Meta", compute="_compute_asi_lo_ve_meta")
+    aviso_ejemplos = fields.Char(compute="_compute_asi_lo_ve_meta")
     nombre_meta = fields.Char(
         "Nombre para Meta",
         compute="_compute_nombre_meta",
@@ -172,6 +174,52 @@ class GtsChatroomPlantillaAlta(models.Model):
                 if not DATO.fullmatch(m.group(0))
             ]
             plantilla.datos_mal_escritos = ", ".join(malos) or False
+
+    @api.depends("cuerpo", "variable_ids.ejemplo", "variable_ids.posicion")
+    def _compute_asi_lo_ve_meta(self):
+        """EL REVISOR DE META NO LEE LA PLANTILLA, LEE EL EJEMPLO MONTADO
+        (Carlos, 26-11-2026). «Te escribo para {{2}}» con el ejemplo «Te
+        escribo para recordarte…» queda duplicado y cortado: parece un uso
+        falso y se rechaza. Y ese ejemplo es luego la pista de la casilla."""
+        for plantilla in self:
+            texto = plantilla.cuerpo or ""
+            avisos = []
+            for variable in plantilla.variable_ids:
+                ejemplo = (variable.ejemplo or "").strip()
+                marca = re.compile(rf"\{{\{{\s*{variable.posicion}\s*\}}\}}")
+                encontrado = marca.search(texto)
+                if ejemplo and encontrado:
+                    antes = texto[: encontrado.start()].split()
+                    # Las 1-3 palabras justo antes del hueco, repetidas al
+                    # principio del ejemplo.
+                    for n in (3, 2, 1):
+                        trozo = " ".join(antes[-n:]).lower().strip(",.:;")
+                        if (
+                            len(antes) >= n
+                            and trozo
+                            and ejemplo.lower().startswith(trozo)
+                        ):
+                            avisos.append(
+                                self.env._(
+                                    "el ejemplo %(n)s repite «%(t)s», que ya está "
+                                    "en el texto",
+                                    n=variable.posicion,
+                                    t=" ".join(antes[-n:]),
+                                )
+                            )
+                            break
+                if ejemplo.endswith(("…", "...")):
+                    avisos.append(
+                        self.env._(
+                            "el ejemplo %s acaba en «…»: escríbelo entero",
+                            variable.posicion,
+                        )
+                    )
+                if ejemplo:
+                    # Con función: un «\1» en el ejemplo no es una referencia.
+                    texto = marca.sub(lambda _m, e=ejemplo: e, texto)
+            plantilla.asi_lo_ve_meta = texto or False
+            plantilla.aviso_ejemplos = "; ".join(avisos) or False
 
     def accion_anadir_variable(self):
         """«+ Dato», como el botón «+ variable» del WhatsApp oficial: pone
@@ -544,7 +592,10 @@ class GtsChatroomPlantillaVariable(models.Model):
         return super().create(vals_list)
 
     ejemplo = fields.Char(
-        "Ejemplo para Meta", help="Un valor real de ejemplo. Meta lo exige."
+        "Ejemplo para Meta",
+        help="Escribe SOLO lo que va en ese hueco, no la frase entera: Meta lee "
+        "el texto con los ejemplos puestos, y una frase repetida o cortada con "
+        "«…» es motivo de rechazo.",
     )
     origen = fields.Selection(
         [("libre", "Se escribe al enviar"), ("campo", "Un campo de la ficha")],
