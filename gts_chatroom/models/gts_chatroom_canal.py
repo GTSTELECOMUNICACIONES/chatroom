@@ -317,7 +317,11 @@ class MailGateway(models.Model):
         """{id de canal: conversaciones sin atender}, para el contador del
         menú."""
         grupos = self.env["discuss.channel"]._read_group(
-            [("alma_es", "=", True), ("alma_cola", "=", "esperando")],
+            [
+                ("alma_es", "=", True),
+                ("alma_cola", "=", "esperando"),
+                ("alma_motivo_bloqueo", "!=", "spam"),
+            ],
             ["gateway_id"],
             ["__count"],
         )

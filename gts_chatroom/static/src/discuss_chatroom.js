@@ -76,6 +76,8 @@ const APARTADOS = [
     ["gts_otros", _t("Atendidas por compañeros"), "fa fa-users"],
     ["gts_ia", _t("Atendidos por la IA"), "fa fa-magic"],
     ["gts_resuelta", _t("Resueltas"), "fa fa-check-circle-o"],
+    // Lo marcado como spam: la IA no le contesta y no cuenta como pendiente.
+    ["gts_spam", _t("Spam"), "fa fa-ban"],
 ];
 
 function esNuestro(id) {
@@ -88,6 +90,9 @@ function esMia(thread) {
 }
 
 function apartadoDe(thread) {
+    if (thread.gts_spam) {
+        return "gts_spam";
+    }
     switch (thread.gts_cola) {
         case "esperando":
             return "gts_esperando";
@@ -177,6 +182,7 @@ patch(Thread.prototype, {
         this.gts_asignado_a = fields.Attr(false);
         this.gts_canal_id = fields.Attr(false);
         this.gts_buzon_id = fields.Attr(false);
+        this.gts_spam = fields.Attr(false);
     },
     _computeDiscussAppCategory() {
         if (this.channel_type === "gateway" && this.gts_cola) {
@@ -492,7 +498,29 @@ async function cambiarRelevo(owner, thread, metodo) {
     }
 }
 
+async function marcarSpam(owner, thread, spam) {
+    await owner.env.services.orm.call("discuss.channel", "action_gts_spam", [[thread.id]], {
+        spam,
+    });
+}
+
 threadActionsRegistry
+    .add("gts-spam", {
+        condition: ({ owner, thread }) => esDelPortal(owner, thread) && !thread.gts_spam,
+        icon: "fa fa-fw fa-ban",
+        iconLarge: "fa fa-fw fa-lg fa-ban",
+        name: _t("Marcar como spam: la IA deja de contestarle"),
+        open: ({ owner, thread }) => marcarSpam(owner, thread, true),
+        sequence: 30,
+    })
+    .add("gts-no-spam", {
+        condition: ({ owner, thread }) => esDelPortal(owner, thread) && thread.gts_spam,
+        icon: "fa fa-fw fa-undo",
+        iconLarge: "fa fa-fw fa-lg fa-undo",
+        name: _t("No es spam"),
+        open: ({ owner, thread }) => marcarSpam(owner, thread, false),
+        sequence: 30,
+    })
     .add("gts-descartar", {
         // Una conversación abierta desde «Nueva conversación» a la que no se
         // llegó a escribir: el portal aún no la conoce (sin cola).

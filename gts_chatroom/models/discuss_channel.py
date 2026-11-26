@@ -8,6 +8,8 @@ from odoo.exceptions import UserError
 
 from odoo.addons.mail.tools.discuss import Store
 
+from .mail_gateway_alma import _digitos
+
 RELEVO = [
     ("ia", "La IA"),
     ("humano", "Una persona"),
@@ -65,6 +67,12 @@ class DiscussChannel(models.Model):
     # Para el aviso de «Resuelta»: no se guarda, se mira al pintar.
     alma_ultimo_cliente = fields.Boolean(compute="_compute_alma_ultimo_cliente")
     alma_motivo_relevo = fields.Char(string="Motivo del relevo", readonly=True)
+    # EL BLOQUEO DEL PORTAL (Carlos, 26-11-2026), dentro de `estado`. Solo
+    # `motivo_bloqueo == "spam"` esconde la conversación: `bloqueado` a secas
+    # también es una baja de marketing de un cliente real, que se sigue
+    # viendo y al que se le puede escribir a mano.
+    alma_bloqueado = fields.Boolean(string="Bloqueado en el portal", readonly=True)
+    alma_motivo_bloqueo = fields.Char(string="Motivo del bloqueo", readonly=True)
 
     @api.model
     def _gts_rotulos_de_la_cola(self):
@@ -215,6 +223,18 @@ class DiscussChannel(models.Model):
         nuestra. Es lo mas nuevo que se sabe aunque los relojes no casen, asi
         que no se descarta por viejo."""
         self.ensure_one()
+        if "bloqueado" in estado and (
+            confirmado or not self.alma_estado_en or emitido_en >= self.alma_estado_en
+        ):
+            bloqueo = {
+                "alma_bloqueado": bool(estado.get("bloqueado")),
+                "alma_motivo_bloqueo": estado.get("motivo_bloqueo") or False,
+            }
+            if (self.alma_bloqueado, self.alma_motivo_bloqueo) != tuple(
+                bloqueo.values()
+            ):
+                self.sudo().write(bloqueo)
+                self._gts_avisar_cola()
         relevo = estado.get("relevo")
         espera = bool(estado.get("espera"))
         if relevo == "esperando":
@@ -265,6 +285,7 @@ class DiscussChannel(models.Model):
             "gts_asignado_a": (self.alma_asignado_a or "").lower() or False,
             "gts_canal_id": self.gateway_id.id or False,
             "gts_buzon_id": self.sudo().gateway_id.gts_buzon_id.id or False,
+            "gts_spam": self.alma_motivo_bloqueo == "spam",
         }
 
     @api.model
@@ -298,6 +319,66 @@ class DiscussChannel(models.Model):
             }
             for canal in (mios or canales)
         ]
+
+    def action_gts_spam(self, spam=True):
+        """MARCAR COMO SPAM (David y Carlos, 26-11-2026): la IA del portal
+        deja de contestarle y la conversación se va al apartado «Spam».
+        `spam: false` va SIEMPRE explícito: el portal marca si no viene.
+        Al desmarcar, el portal devuelve el bloqueo que tuviera antes (una
+        baja, por ejemplo) en vez de reactivarlo."""
+        self.ensure_one()
+        if not self.alma_es:
+            raise UserError(self.env._("Esta conversación no es del ChatRoom."))
+        if not self.env.user.has_group("mail_gateway.gateway_user"):
+            raise UserError(
+                self.env._("No tiene permiso para atender conversaciones de WhatsApp.")
+            )
+        self.check_access("write")
+        gateway = self.sudo().gateway_id
+        Alma = self.env["mail.gateway.alma"]
+        try:
+            respuesta = Alma._alma_peticion(
+                gateway,
+                "POST",
+                "/api/odoo/spam",
+                json={
+                    "numero": _digitos(gateway.alma_numero),
+                    "a": self.gateway_channel_token,
+                    "spam": bool(spam),
+                },
+            )
+        except Exception as error:  # noqa: BLE001 - se explica, no se pierde
+            raise UserError(
+                self.env._(
+                    "No se ha podido hablar con el portal: la conversación sigue "
+                    "como estaba.\n\nDetalle: %s",
+                    error,
+                )
+            ) from error
+        datos = Alma._alma_json(respuesta)
+        if not Alma._alma_ok(respuesta, datos):
+            raise UserError(Alma._alma_texto_error(respuesta, datos))
+        marcado = bool(datos.get("spam"))
+        self.sudo().write(
+            {
+                "alma_bloqueado": marcado or bool(datos.get("sigue_bloqueado")),
+                "alma_motivo_bloqueo": (
+                    "spam" if marcado else (datos.get("motivo_bloqueo") or False)
+                ),
+            }
+        )
+        self._gts_avisar_cola()
+        if marcado:
+            texto = self.env._(
+                "%s la marca como spam: la IA deja de contestarle.",
+                self.env.user.name,
+            )
+        else:
+            texto = self.env._("%s quita la marca de spam.", self.env.user.name)
+        self.sudo().with_context(no_gateway_notification=True).message_post(
+            body=texto, message_type="notification", subtype_xmlid="mail.mt_note"
+        )
+        return False
 
     def action_gts_descartar(self):
         """DESCARTAR UNA CONVERSACIÓN ABIERTA SIN ESCRIBIR (David,
