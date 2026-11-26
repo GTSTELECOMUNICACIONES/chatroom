@@ -132,7 +132,14 @@ class MailGatewayAlma(models.AbstractModel):
         # El portal identifica la cuenta por el numero emisor. Si no casa con
         # el de esta pasarela, es un error de configuracion de alguien, y lo
         # unico seguro es no meterlo en la conversacion de otro.
-        if gateway.alma_numero and evento["numero"] != _digitos(gateway.alma_numero):
+        # Un aviso de plantilla puede venir sin número: casa por el id de la
+        # plantilla DENTRO de esta pasarela, así que no cruza de cuenta.
+        sin_numero_vale = evento["tipo"] == "plantilla" and not evento["numero"]
+        if (
+            gateway.alma_numero
+            and not sin_numero_vale
+            and evento["numero"] != _digitos(gateway.alma_numero)
+        ):
             _logger.warning(
                 "ChatRoom: evento para el numero %s en la pasarela %s, descartado",
                 evento["numero"],
@@ -143,6 +150,14 @@ class MailGatewayAlma(models.AbstractModel):
             self._alma_acuse(gateway, evento)
         elif evento["tipo"] == "mensaje":
             self._alma_mensaje(gateway, evento)
+        elif evento["tipo"] == "plantilla":
+            self.env["gts.chatroom.plantilla"].sudo()._gts_aviso_de_meta(
+                gateway, update.get("plantilla") or {}
+            )
+            # No mueve la marca de /desde: es de las conversaciones, y un
+            # aviso sin `emitido_en` la pondría en «ahora» saltándose lo que
+            # falte por recuperar.
+            return True
         else:
             canal = self.env["discuss.channel"].browse(
                 gateway._get_channel_id(evento["telefono"])

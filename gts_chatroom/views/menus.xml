@@ -69,24 +69,10 @@
         action="gts_chatroom_plantilla_action"
         sequence="40"
     />
-    <!-- El monedero vive en el portal; esto lleva allí sin tener que
-         acordarse del enlace (David, 26-11-2026). -->
-    <record id="action_chatroom_creditos" model="ir.actions.server">
-        <field name="name">Créditos</field>
-        <field name="model_id" ref="mail_gateway.model_mail_gateway" />
-        <field name="state">code</field>
-        <field name="code">action = model._gts_abrir_portal()</field>
-        <!-- Con grupo: sin él, Odoo exige escribir en mail.gateway, que solo
-             puede el administrador. -->
-        <field name="group_ids" eval="[(4, ref('mail_gateway.gateway_user'))]" />
-    </record>
-    <menuitem
-        id="menu_chatroom_creditos"
-        name="Créditos"
-        parent="menu_chatroom_root"
-        action="action_chatroom_creditos"
-        sequence="80"
-    />
+    <!-- «Créditos» se quitó el 26-11-2026: la pantalla de facturación del
+         portal es la de agentes de voz y no le dice nada a un cliente del
+         ChatRoom. Vuelve cuando exista la del monedero; el método
+         `mail.gateway._gts_abrir_portal` sigue escrito. -->
     <menuitem
         id="menu_chatroom_config"
         name="Configuración"

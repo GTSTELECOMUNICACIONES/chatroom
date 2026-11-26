@@ -28,6 +28,15 @@ def _mismo_texto(uno, otro):
 
 _logger = logging.getLogger(__name__)
 
+# Los estados de Meta en el aviso, como los pinta el catálogo del portal.
+ESTADOS_META = {
+    "approved": "aprobada",
+    "rejected": "rechazada",
+    "pending": "pendiente",
+    "paused": "pausada",
+    "disabled": "desactivada",
+}
+
 CATEGORIAS = {
     "MARKETING": "Marketing",
     "UTILITY": "Utilidad",
@@ -137,6 +146,42 @@ class GtsChatroomPlantilla(models.Model):
                 "next": {"type": "ir.actions.client", "tag": "soft_reload"},
             },
         }
+
+    @api.model
+    def _gts_aviso_de_meta(self, gateway, datos):
+        """EL AVISO DE META AL MOMENTO (Carlos, 26-11-2026): el portal manda
+        {tipo: plantilla, plantilla: {id, nombre, estado, categoria,
+        categoria_declarada, motivo}} cuando Meta aprueba, rechaza o
+        reclasifica. Se aplica lo que trae y se pide el catálogo entero
+        enseguida, que es el que dice si `se_puede_enviar`. El cron de 10
+        minutos queda de red: el aviso es rápido y se puede perder."""
+        if not isinstance(datos, dict) or not datos.get("id"):
+            return
+        plantilla = self.with_context(active_test=False).search(
+            [("gateway_id", "=", gateway.id), ("alma_id", "=", str(datos["id"]))],
+            limit=1,
+        )
+        if plantilla:
+            vals = {}
+            if datos.get("estado"):
+                estado = str(datos["estado"]).lower()
+                vals["estado"] = ESTADOS_META.get(estado, estado)
+                if estado != "approved":
+                    vals["se_puede_enviar"] = False
+            if datos.get("categoria"):
+                vals["categoria"] = datos["categoria"]
+                vals["reclasificada"] = bool(
+                    datos.get("categoria_declarada")
+                    and datos["categoria_declarada"] != datos["categoria"]
+                )
+            if "motivo" in datos:
+                vals["motivo"] = datos.get("motivo") or False
+            plantilla.write(vals)
+        cron = self.env.ref(
+            "gts_chatroom.ir_cron_sincronizar_plantillas", raise_if_not_found=False
+        )
+        if cron:
+            cron.sudo()._trigger()
 
     @api.model
     def _gts_sincronizar_plantillas(self):
