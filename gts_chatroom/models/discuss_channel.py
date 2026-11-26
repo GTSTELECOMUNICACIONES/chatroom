@@ -167,6 +167,41 @@ class DiscussChannel(models.Model):
         usuario de entrada si no tiene. Es lo que viaja en `asignado_a`."""
         return usuario.email or usuario.login
 
+    def _gts_comprobar_correo_unico(self, usuario):
+        """EL CORREO ES LA IDENTIDAD DEL OPERADOR: «Para mí» compara con él y
+        el portal asigna por él. Dos usuarios con el mismo correo son la misma
+        persona para el ChatRoom; pasarle la conversación a uno se la deja
+        también al otro (GTS Racing, 26-11-2026: David y José con el correo
+        genérico de la empresa). Se para antes de llamar al portal."""
+        correo = (self._alma_correo(usuario) or "").strip()
+        if not correo:
+            return
+        otros = (
+            self.env["res.users"]
+            .sudo()
+            .search(
+                [
+                    ("id", "!=", usuario.id),
+                    ("share", "=", False),
+                    "|",
+                    ("email", "=ilike", correo),
+                    ("login", "=ilike", correo),
+                ]
+            )
+        )
+        if otros:
+            raise UserError(
+                self.env._(
+                    "%(u)s comparte el correo %(c)s con %(o)s. El ChatRoom "
+                    "reconoce a cada operador por su correo, así que no los "
+                    "puede distinguir. Pon a cada uno su propio correo en su "
+                    "usuario (Ajustes → Usuarios) y vuelve a intentarlo.",
+                    u=usuario.name,
+                    c=correo,
+                    o=", ".join(otros.mapped("name")),
+                )
+            )
+
     # ------------------------------------------------------------------
     # La copia del estado
     # ------------------------------------------------------------------
@@ -387,6 +422,8 @@ class DiscussChannel(models.Model):
             )
         usuario = para or self.env.user
         quien = self.env.user
+        if relevo == "humano":
+            self._gts_comprobar_correo_unico(usuario)
         # La hora de ANTES de llamar: cualquier evento que el portal emita
         # despues de aplicar el cambio sera mas nuevo y pisara a este.
         antes_de_llamar = fields.Datetime.now()
