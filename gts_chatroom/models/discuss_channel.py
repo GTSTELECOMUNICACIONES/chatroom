@@ -294,13 +294,17 @@ class DiscussChannel(models.Model):
         return True
 
     def action_gts_pasar(self):
-        """Abre «Pasar a otra persona»."""
+        """Abre «Pasar a otra persona». Se llama con `orm.call` desde Chats,
+        no como botón: ese camino no pasa por `clean_action`, que es quien
+        rellena `views` a partir de `view_mode`, y sin `views` el cliente
+        revienta («reading 'map'»)."""
         self.ensure_one()
         return {
             "type": "ir.actions.act_window",
             "name": self.env._("Pasar a otra persona"),
             "res_model": "gts.chatroom.pasar",
             "view_mode": "form",
+            "views": [(False, "form")],
             "target": "new",
             "context": {"default_canal_id": self.id},
         }
