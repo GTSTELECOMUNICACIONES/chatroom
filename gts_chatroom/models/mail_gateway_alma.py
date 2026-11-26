@@ -22,7 +22,7 @@ from datetime import UTC, datetime, timedelta
 import requests
 from markupsafe import Markup
 
-from odoo import api, models, modules
+from odoo import api, fields, models, modules
 from odoo.http import request
 from odoo.tools import html2plaintext, plaintext2html
 
@@ -532,6 +532,12 @@ class MailGatewayAlma(models.AbstractModel):
     # Salida
     # ------------------------------------------------------------------
 
+    def _alma_correo_del_autor(self, mensaje):
+        usuario = mensaje.author_id.user_ids.filtered(lambda u: not u.share)[:1]
+        if not usuario:
+            return None
+        return (self.env["discuss.channel"]._alma_correo(usuario) or "").lower() or None
+
     def _alma_numero_de(self, gateway):
         return _digitos(gateway.alma_numero)
 
@@ -704,6 +710,8 @@ class MailGatewayAlma(models.AbstractModel):
                 "a": canal.gateway_channel_token,
                 **contenido,
                 "operador": mensaje.author_id.name,
+                # Quien escribe se la queda: el portal la asigna a este correo.
+                "asignado_a": self._alma_correo_del_autor(mensaje),
             },
         }
 
@@ -795,35 +803,19 @@ class MailGatewayAlma(models.AbstractModel):
         if datos.get("conversacion_id") and not canal.alma_conversacion_id:
             canal.sudo().alma_conversacion_id = str(datos["conversacion_id"])
         record.mail_message_id._notify_message_notification_update()
-        self._alma_quedarsela_quien_empieza(record)
-
-    def _alma_quedarsela_quien_empieza(self, record):
-        """LA CONVERSACIÓN QUE EMPIEZA UN OPERADOR ES SUYA (David,
-        26-11-2026): con una plantilla desde «Nueva conversación», el portal
-        la abría con la IA y salía en «Atendidos por la IA». Ya aceptada la
-        plantilla y con su `conversacion_id`, se pide el relevo a una persona,
-        asignado a quien la mandó. Si falla, se queda como estaba: nunca
-        puede deshacer un envío que ya salió."""
-        mensaje = record.mail_message_id
-        canal = record.gateway_channel_id.sudo()
-        usuario = mensaje.author_id.user_ids.filtered(lambda u: not u.share)[:1]
-        if (
-            not mensaje.alma_plantilla_id
-            or not usuario
-            or not canal.alma_conversacion_id
-            or canal.alma_cola == "asignada"
-        ):
-            return
-        try:
-            with self.env.cr.savepoint():
-                canal.with_user(usuario).with_context(
-                    gts_desde_chats=True
-                )._alma_cambiar_relevo("humano")
-        except Exception:  # noqa: BLE001 - el envío ya salió; esto es un extra
-            _logger.warning(
-                "ChatRoom: no se pudo asignar %s a quien la empezó",
-                canal.id,
-                exc_info=True,
+        # QUIEN ESCRIBE SE LA QUEDA (Carlos, 26-11-2026): el portal pasa la
+        # conversación a una persona, asignada al `asignado_a` que se manda,
+        # ANTES de contestar el 202, sin la ventana en que la IA contestaba
+        # por encima. Aquí se copia lo que dice que ha quedado.
+        if datos.get("relevo"):
+            canal.sudo()._alma_aplicar_estado(
+                {
+                    "relevo": datos["relevo"],
+                    "asignado_a": datos.get("asignado_a"),
+                    "espera": False,
+                },
+                fields.Datetime.now(),
+                confirmado=True,
             )
 
     def _alma_marcar_fallido(self, record, texto):
