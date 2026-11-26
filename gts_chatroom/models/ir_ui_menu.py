@@ -5,7 +5,9 @@ from odoo import models
 _logger = logging.getLogger(__name__)
 
 MENU_ESPERANDO = "gts_chatroom.menu_chatroom_esperando"
-MENU_RAIZ = "gts_chatroom.menu_chatroom_root"
+# La versión va en «Configuración», no en el nombre de la aplicación: en el
+# icono del inicio quedaba feo (David, 26-11-2026).
+MENU_VERSION = "gts_chatroom.menu_chatroom_config"
 
 
 class IrUiMenu(models.Model):
@@ -46,11 +48,13 @@ class IrUiMenu(models.Model):
         return menus
 
     def _alma_version_en_el_menu(self, menus):
-        """La version, ARRIBA, en el nombre de la aplicacion: «ChatRoom ·
-        v0.3.3». Cuando un cliente llama con un problema, se le pregunta y la
-        ve sin entrar en Aplicaciones (David, 21-11-2026). Sale de la version
-        INSTALADA, no del fichero: es la que de verdad corre."""
-        raiz = next((m for m in menus.values() if m.get("xmlid") == MENU_RAIZ), None)
+        """La version dentro del modulo, en el menu «Configuración ·
+        v0.11.5». Cuando un cliente llama con un problema, se le pregunta y
+        la ve sin entrar en Aplicaciones (David, 21-11-2026). Antes iba en el
+        nombre de la aplicacion y salia tambien en el icono del inicio, que
+        quedaba feo (26-11-2026). Sale de la version INSTALADA, no del
+        fichero: es la que de verdad corre."""
+        raiz = next((m for m in menus.values() if m.get("xmlid") == MENU_VERSION), None)
         if not raiz:
             return
         try:
