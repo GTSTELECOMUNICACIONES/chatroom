@@ -187,6 +187,18 @@ class GtsChatroomPlantilla(models.Model):
                 [("gateway_id", "=", gateway.id), ("alma_id", "=", vals["alma_id"])],
                 limit=1,
             )
+            if not plantilla:
+                # UN BORRADOR QUE YA SE PRESENTÓ y cuya respuesta no llegó
+                # (corte, tiempo agotado): está en Meta y aquí sin id. Se le
+                # pone el suyo por el nombre en vez de crear otra (Carlos,
+                # 26-11-2026).
+                plantilla = Plantilla.search(
+                    [
+                        ("gateway_id", "=", gateway.id),
+                        ("alma_id", "=", False),
+                        ("creada_en_odoo", "=", True),
+                    ]
+                ).filtered(lambda p, n=vals["name"]: p.nombre_meta == n)[:1]
             if plantilla:
                 if plantilla.creada_en_odoo:
                     vals.pop("name")

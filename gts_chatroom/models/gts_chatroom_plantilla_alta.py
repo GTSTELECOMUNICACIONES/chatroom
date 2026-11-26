@@ -367,12 +367,24 @@ class GtsChatroomPlantillaAlta(models.Model):
             )
         self._comprobar_para_meta()
         Alma = self.env["mail.gateway.alma"]
-        respuesta = Alma._alma_peticion(
-            self.gateway_id.sudo(),
-            "POST",
-            "/api/odoo/plantillas",
-            json=self._cuerpo_para_el_portal(),
-        )
+        try:
+            respuesta = Alma._alma_peticion(
+                self.gateway_id.sudo(),
+                "POST",
+                "/api/odoo/plantillas",
+                json=self._cuerpo_para_el_portal(),
+            )
+        except Exception as error:  # noqa: BLE001 - se explica, no se pierde
+            # Una respuesta que no llega no quiere decir que no se presentara.
+            raise UserError(
+                self.env._(
+                    "No llegó la respuesta del portal (%s). Puede que la "
+                    "plantilla SÍ se presentara: antes de volver a enviarla, "
+                    "pulsa «Copiar del portal» en la lista. Si ya está, este "
+                    "borrador se enlaza con ella solo.",
+                    error,
+                )
+            ) from error
         datos = Alma._alma_json(respuesta)
         if not Alma._alma_ok(respuesta, datos) or not datos.get("id"):
             # El portal devuelve TODOS los fallos de golpe en `fallos`, y si
