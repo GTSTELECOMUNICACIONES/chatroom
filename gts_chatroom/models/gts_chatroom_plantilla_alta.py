@@ -38,6 +38,11 @@ MAX_CABECERA = 60
 MAX_PIE = 60
 MAX_BOTON = 25
 MAX_BOTONES = 10
+MAX_BOTONES_URL = 2
+MAX_BOTONES_TELEFONO = 1
+# Los tipos de botón de Meta, tal cual (Carlos, 26-11-2026: traducirlos
+# sería otro sitio donde equivocarse).
+TIPO_BOTON_META = {"respuesta": "QUICK_REPLY", "url": "URL", "telefono": "PHONE_NUMBER"}
 
 
 def nombre_meta(nombre):
@@ -112,13 +117,20 @@ class GtsChatroomPlantillaAlta(models.Model):
         help="Minúsculas y guiones bajos: así lo pide Meta.",
     )
 
-    @api.depends("creada_en_odoo", "alma_id", "estado")
+    @api.depends("creada_en_odoo", "alma_id")
     def _compute_editable(self):
+        # Una plantilla ya en Meta NO se edita, ni rechazada: Meta no lo deja
+        # y tampoco deja reusar su nombre (Carlos, 26-11-2026). Se duplica,
+        # que crea un borrador con otro nombre.
         for plantilla in self:
-            plantilla.editable = plantilla.creada_en_odoo and (
-                not plantilla.alma_id
-                or (plantilla.estado or "").lower() in ("rechazada", "rejected")
-            )
+            plantilla.editable = plantilla.creada_en_odoo and not plantilla.alma_id
+
+    def copy_data(self, default=None):
+        vals_list = super().copy_data(default=default)
+        for plantilla, vals in zip(self, vals_list, strict=True):
+            if "name" not in (default or {}):
+                vals["name"] = self.env._("%s (corregida)", plantilla.name)
+        return vals_list
 
     @api.depends("name")
     def _compute_nombre_meta(self):
@@ -133,9 +145,10 @@ class GtsChatroomPlantillaAlta(models.Model):
     def create(self, vals_list):
         for vals in vals_list:
             if not vals.get("alma_id"):
-                # Sin id del portal solo se crea desde aquí.
-                vals.setdefault("creada_en_odoo", True)
-                vals.setdefault("estado", "borrador")
+                # Sin id del portal solo se crea desde aquí (también al
+                # duplicar una rechazada para corregirla).
+                vals["creada_en_odoo"] = True
+                vals.update(estado="borrador", motivo=False, se_puede_enviar=False)
             self._valores_de_alta(vals)
         plantillas = super().create(vals_list)
         plantillas._ajustar_variables()
@@ -253,10 +266,25 @@ class GtsChatroomPlantillaAlta(models.Model):
                     "La cabecera es de hasta %s caracteres y sin datos.", MAX_CABECERA
                 )
             )
-        if self.pie and len(self.pie) > MAX_PIE:
-            errores.append(self.env._("El pie es de hasta %s caracteres.", MAX_PIE))
-        if len(self.boton_ids) > MAX_BOTONES:
-            errores.append(self.env._("Como mucho %s botones.", MAX_BOTONES))
+        if self.pie and (len(self.pie) > MAX_PIE or DATO.search(self.pie)):
+            errores.append(
+                self.env._("El pie es de hasta %s caracteres y sin datos.", MAX_PIE)
+            )
+        tipos = self.boton_ids.mapped("tipo")
+        if (
+            len(tipos) > MAX_BOTONES
+            or tipos.count("url") > MAX_BOTONES_URL
+            or tipos.count("telefono") > MAX_BOTONES_TELEFONO
+        ):
+            errores.append(
+                self.env._(
+                    "Como mucho %(t)s botones: %(u)s de abrir una web y %(f)s "
+                    "de llamar.",
+                    t=MAX_BOTONES,
+                    u=MAX_BOTONES_URL,
+                    f=MAX_BOTONES_TELEFONO,
+                )
+            )
         for boton in self.boton_ids:
             if len(boton.texto or "") > MAX_BOTON:
                 errores.append(
@@ -291,7 +319,8 @@ class GtsChatroomPlantillaAlta(models.Model):
             "idioma": self.idioma or "es",
             "categoria": self.categoria or "UTILITY",
             "cuerpo": (self.cuerpo or "").strip(),
-            "cabecera": self.cabecera or None,
+            "cabecera_tipo": "TEXT" if self.cabecera else "NONE",
+            "cabecera_texto": self.cabecera or None,
             "pie": self.pie or None,
             "botones": [b._para_el_portal() for b in self.boton_ids],
             "ejemplos": {
@@ -430,7 +459,7 @@ class GtsChatroomPlantillaBoton(models.Model):
 
     def _para_el_portal(self):
         self.ensure_one()
-        boton = {"tipo": self.tipo, "texto": self.texto}
+        boton = {"tipo": TIPO_BOTON_META[self.tipo], "texto": self.texto}
         if self.tipo == "url":
             boton["url"] = self.valor
         elif self.tipo == "telefono":
