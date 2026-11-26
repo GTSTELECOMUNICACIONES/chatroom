@@ -209,12 +209,21 @@ class MailGateway(models.Model):
         "Buzón",
         ondelete="restrict",
         index=True,
-        default=lambda self: self.env["gts.chatroom.buzon"]._gts_central(),
+        # SIN `default`: al añadir la columna, Odoo rellena las filas que ya
+        # hay con el valor por defecto ANTES de crear la tabla de los
+        # buzones, y crear Central ahí tumbó la actualización (staging,
+        # 26-11-2026, `fields.py` update_db_notnull -> _init_column). Lo pone
+        # `create` y, para las que ya había, `_gts_preparar_central`.
         help="Quién atiende este canal lo decide su buzón.",
     )
 
     @api.model_create_multi
     def create(self, vals_list):
+        sin_buzon = [v for v in vals_list if not v.get("gts_buzon_id")]
+        if sin_buzon:
+            central = self.env["gts.chatroom.buzon"]._gts_central()
+            for vals in sin_buzon:
+                vals["gts_buzon_id"] = central.id
         canales = super().create(vals_list)
         canales._gts_aplicar_buzon()
         return canales
