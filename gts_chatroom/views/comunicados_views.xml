@@ -75,6 +75,12 @@
                             <group name="texto">
                                 <field name="cabecera" readonly="not editable" placeholder="(opcional) Hasta 60 caracteres, sin {{datos}}" />
                                 <field name="cuerpo" readonly="not editable" required="editable" widget="text" placeholder="Hola {{1}}, te recordamos tu clase del {{2}}. Si no puedes venir, avísanos." />
+                                <div colspan="2" class="text-end" invisible="not editable">
+                                    <button name="accion_anadir_variable" type="object" string="Dato" icon="fa-plus" class="btn-link" title="Añade el siguiente {{n}} al final del texto" />
+                                </div>
+                                <div colspan="2" class="alert alert-danger py-2" role="alert" invisible="not datos_mal_escritos">
+                                    Dato mal escrito: <field name="datos_mal_escritos" class="d-inline fw-bold" />. Se escribe con dos llaves: {{1}}, {{2}}…
+                                </div>
                                 <field name="pie" readonly="not editable" placeholder="(opcional) Hasta 60 caracteres, sin {{datos}}" />
                             </group>
                         </page>

@@ -26,6 +26,9 @@ from odoo.exceptions import UserError
 from .mail_gateway_alma import _digitos
 
 DATO = re.compile(r"\{\{\s*(\d+)\s*\}\}")
+# Un dato a medio escribir: «{{2]]», «{2}}», «{{2}», «[[2]]»… Se queda como
+# texto y la plantilla sale con un dato de menos (David, 26-11-2026).
+DATO_MAL = re.compile(r"[\{\[]{1,2}\s*\d+\s*[\}\]]{1,2}")
 CATEGORIAS_ALTA = [("UTILITY", "Utilidad"), ("MARKETING", "Marketing")]
 IDIOMAS = [
     ("es", "Español"),
@@ -122,6 +125,7 @@ class GtsChatroomPlantillaAlta(models.Model):
         help="De dónde sale el número en esa ficha, por ejemplo «phone» o "
         "«partner_id.phone».",
     )
+    datos_mal_escritos = fields.Char(compute="_compute_datos_mal_escritos")
     nombre_meta = fields.Char(
         "Nombre para Meta",
         compute="_compute_nombre_meta",
@@ -158,6 +162,26 @@ class GtsChatroomPlantillaAlta(models.Model):
         while f"{base}_v{n}" in usados:
             n += 1
         return f"{base}_v{n}"
+
+    @api.depends("cuerpo")
+    def _compute_datos_mal_escritos(self):
+        for plantilla in self:
+            malos = [
+                m.group(0)
+                for m in DATO_MAL.finditer(plantilla.cuerpo or "")
+                if not DATO.fullmatch(m.group(0))
+            ]
+            plantilla.datos_mal_escritos = ", ".join(malos) or False
+
+    def accion_anadir_variable(self):
+        """«+ Dato», como el botón «+ variable» del WhatsApp oficial: pone
+        el siguiente {{n}} al final del texto. Luego se mueve donde vaya."""
+        for plantilla in self.filtered("editable"):
+            numeros = [int(n) for n in DATO.findall(plantilla.cuerpo or "")]
+            siguiente = max(numeros, default=0) + 1
+            cuerpo = (plantilla.cuerpo or "").rstrip()
+            plantilla.cuerpo = f"{cuerpo} {{{{{siguiente}}}}}".lstrip()
+        return True
 
     @api.depends("name")
     def _compute_nombre_meta(self):
@@ -261,6 +285,13 @@ class GtsChatroomPlantillaAlta(models.Model):
         cuerpo = (self.cuerpo or "").strip()
         if not self.name or not self.nombre_meta:
             errores.append(self.env._("Ponle un nombre."))
+        if self.datos_mal_escritos:
+            errores.append(
+                self.env._(
+                    "Dato mal escrito: %s. Se escribe con dos llaves, {{2}}.",
+                    self.datos_mal_escritos,
+                )
+            )
         if not cuerpo:
             errores.append(self.env._("Escribe el texto."))
         if len(cuerpo) > MAX_CUERPO:
