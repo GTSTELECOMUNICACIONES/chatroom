@@ -136,8 +136,24 @@ class GtsChatroomPlantillaAlta(models.Model):
         vals_list = super().copy_data(default=default)
         for plantilla, vals in zip(self, vals_list, strict=True):
             if "name" not in (default or {}):
-                vals["name"] = self.env._("%s (corregida)", plantilla.name)
+                vals["name"] = plantilla._siguiente_version()
         return vals_list
+
+    def _siguiente_version(self):
+        """«aviso_clases» → «aviso_clases_v2», o _v3 si la v2 ya existe. Un
+        sufijo fijo y no texto libre: Meta solo admite minúsculas, números y
+        guion bajo, y no deja reusar un nombre (Carlos, 26-11-2026)."""
+        self.ensure_one()
+        base = re.sub(r"_v\d+$", "", nombre_meta(self.name))
+        usados = set(
+            self.with_context(active_test=False)
+            .search([("gateway_id", "=", self.gateway_id.id)])
+            .mapped("nombre_meta")
+        )
+        n = 2
+        while f"{base}_v{n}" in usados:
+            n += 1
+        return f"{base}_v{n}"
 
     @api.depends("name")
     def _compute_nombre_meta(self):
@@ -354,6 +370,15 @@ class GtsChatroomPlantillaAlta(models.Model):
         )
         datos = Alma._alma_json(respuesta)
         if not Alma._alma_ok(respuesta, datos) or not datos.get("id"):
+            # El portal devuelve TODOS los fallos de golpe en `fallos`, y si
+            # Meta la rechaza, su frase literal en `error` (Carlos).
+            fallos = datos.get("fallos")
+            if isinstance(fallos, list) and fallos:
+                raise UserError(
+                    self.env._("El portal no la acepta:")
+                    + "\n"
+                    + "\n".join(f"• {f}" for f in fallos)
+                )
             raise UserError(Alma._alma_texto_error(respuesta, datos))
         self.write(
             {
