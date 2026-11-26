@@ -30,17 +30,24 @@ def main(ruta):
         for clase in ast.walk(ast.parse(py.read_text())):
             if not isinstance(clase, ast.ClassDef):
                 continue
-            hereda = None
+            heredados = set()
             for c in clase.body:
                 if (
                     isinstance(c, ast.Assign)
                     and isinstance(c.targets[0], ast.Name)
                     and c.targets[0].id == "_inherit"
-                    and isinstance(c.value, ast.Constant)
                 ):
-                    hereda = c.value.value
-            if hereda not in CALIENTES:
+                    # `_inherit = "res.partner"` y también la forma de lista.
+                    valores = (
+                        c.value.elts if isinstance(c.value, ast.List) else [c.value]
+                    )
+                    heredados |= {
+                        v.value for v in valores if isinstance(v, ast.Constant)
+                    }
+            calientes = heredados & CALIENTES
+            if not calientes:
                 continue
+            hereda = ", ".join(sorted(calientes))
             for c in clase.body:
                 if (
                     isinstance(c, ast.Assign)
