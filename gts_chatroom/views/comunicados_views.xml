@@ -38,7 +38,7 @@
                         <field name="por_que_no" readonly="1" />
                     </div>
                     <div class="alert alert-danger" role="alert" invisible="not motivo">
-                        Meta la rechazó: <field name="motivo" readonly="1" class="d-inline" />
+                        <span invisible="not alma_id">Meta la rechazó: </span><field name="motivo" readonly="1" class="d-inline" />
                     </div>
                     <div class="alert alert-info" role="status" invisible="not reclasificada">
                         Meta la ha reclasificado: se cobra y se trata como <field name="categoria_texto" class="fw-bold" readonly="1" />.

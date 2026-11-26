@@ -17,6 +17,13 @@ from odoo.exceptions import UserError
 
 from .mail_gateway_alma import _digitos
 
+
+def _mismo_texto(uno, otro):
+    """Iguales salvo espacios y saltos de línea de sobra, que Meta a veces
+    normaliza."""
+    return " ".join((uno or "").split()) == " ".join((otro or "").split())
+
+
 CATEGORIAS = {
     "MARKETING": "Marketing",
     "UTILITY": "Utilidad",
@@ -192,13 +199,29 @@ class GtsChatroomPlantilla(models.Model):
                 # (corte, tiempo agotado): está en Meta y aquí sin id. Se le
                 # pone el suyo por el nombre en vez de crear otra (Carlos,
                 # 26-11-2026).
-                plantilla = Plantilla.search(
+                # SOLO SI EL TEXTO ES EL MISMO: con el nombre a secas, un
+                # borrador adoptaría una plantilla AJENA que ya usaba ese
+                # nombre y saldría otro texto al cliente sin ningún error
+                # (Carlos). Si el texto no casa, el nombre está ocupado y se
+                # le dice al borrador.
+                mismo_nombre = Plantilla.search(
                     [
                         ("gateway_id", "=", gateway.id),
                         ("alma_id", "=", False),
                         ("creada_en_odoo", "=", True),
                     ]
-                ).filtered(lambda p, n=vals["name"]: p.nombre_meta == n)[:1]
+                ).filtered(lambda p, n=vals["name"]: p.nombre_meta == n)
+                plantilla = mismo_nombre.filtered(
+                    lambda p, c=vals["cuerpo"]: _mismo_texto(p.cuerpo, c)
+                )[:1]
+                (mismo_nombre - plantilla).write(
+                    {
+                        "motivo": self.env._(
+                            "Ese nombre ya lo usa en Meta otra plantilla con otro "
+                            "texto. Cámbiale el nombre antes de enviarla."
+                        )
+                    }
+                )
             if plantilla:
                 if plantilla.creada_en_odoo:
                     vals.pop("name")
