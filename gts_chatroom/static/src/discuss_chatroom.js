@@ -1,4 +1,4 @@
-import { Component } from "@odoo/owl";
+import { Component, onMounted, onWillStart, onWillUnmount, reactive, useState } from "@odoo/owl";
 import { threadActionsRegistry } from "@mail/core/common/thread_actions";
 import { Thread } from "@mail/core/common/thread_model";
 import { fields } from "@mail/core/common/record";
@@ -8,8 +8,10 @@ import {
     DiscussSidebar,
     discussSidebarItemsRegistry,
 } from "@mail/core/public_web/discuss_sidebar";
+import { DiscussSidebarCategories } from "@mail/discuss/core/public_web/discuss_sidebar_categories";
 import { DiscussAppCategory } from "@mail/discuss/core/public_web/discuss_app_category_model";
 import { compareDatetime } from "@mail/utils/common/misc";
+import { browser } from "@web/core/browser/browser";
 import { _t } from "@web/core/l10n/translation";
 import { useService } from "@web/core/utils/hooks";
 import { patch } from "@web/core/utils/patch";
@@ -30,6 +32,11 @@ import { session } from "@web/session";
  * 3. En la cabecera de cada chat: Atender (cogerla y unirse), Devolver a la
  *    IA y Resuelta. Los mismos botones que las tarjetas.
  * 4. «Nueva conversación»: contacto, canal y plantilla, sin salir de aquí.
+ * 5. Arriba, EL BUZÓN: el nombre del canal y el número por el que se
+ *    atiende, para no contestar desde el que no es. Con varios, se elige.
+ *    Mientras haya conversaciones sin atender, una bolita roja parpadea y
+ *    pita cada pocos segundos (se puede silenciar).
+ * 6. «Pasar a otra persona» en la cabecera del chat.
  *
  * Lo que no es del portal (otras pasarelas) sigue en el apartado «ChatRoom».
  */
@@ -37,6 +44,24 @@ import { session } from "@web/session";
 // La vista que se está pintando: la del ChatRoom o la de siempre. Variable
 // del módulo y no un campo del store: lo fija la acción antes de pintar.
 const vista = { soloChatroom: false };
+
+// El buzón elegido arriba (false = todos). Reactivo: al cambiarlo se
+// repinta el lateral.
+const CLAVE_BUZON = "gts_chatroom.buzon";
+const CLAVE_SILENCIO = "gts_chatroom.silencio";
+const filtro = reactive({ canal: leerNumero(CLAVE_BUZON) });
+
+function leerNumero(clave) {
+    try {
+        return parseInt(browser.localStorage.getItem(clave)) || false;
+    } catch {
+        return false;
+    }
+}
+
+function delBuzon(thread) {
+    return !filtro.canal || thread.gts_canal_id === filtro.canal;
+}
 
 // (id del apartado, nombre, icono). El orden es el de la pantalla.
 const APARTADOS = [
@@ -136,6 +161,7 @@ patch(Thread.prototype, {
         super.setup();
         this.gts_cola = fields.Attr(false);
         this.gts_asignado_a = fields.Attr(false);
+        this.gts_canal_id = fields.Attr(false);
     },
     _computeDiscussAppCategory() {
         if (this.channel_type === "gateway" && this.gts_cola) {
@@ -161,6 +187,23 @@ patch(DiscussSidebar.prototype, {
     },
 });
 
+patch(DiscussSidebarCategories.prototype, {
+    setup() {
+        super.setup(...arguments);
+        // Leer el filtro a través de useState suscribe el lateral a él.
+        this.gtsFiltro = useState(filtro);
+    },
+    filteredThreads(threads) {
+        const hilos = super.filteredThreads(threads);
+        if (!vista.soloChatroom || !this.gtsFiltro.canal) {
+            return hilos;
+        }
+        return hilos.filter(
+            (thread) => thread.channel_type !== "gateway" || delBuzon(thread)
+        );
+    },
+});
+
 patch(DiscussClientAction.prototype, {
     setup() {
         super.setup(...arguments);
@@ -176,6 +219,117 @@ patch(DiscussClientAction.prototype, {
         return activeId;
     },
 });
+
+// ---------------------------------------------------------------------
+// El buzón: nombre, número y el aviso de lo que espera
+// ---------------------------------------------------------------------
+
+let audio = null;
+
+function pitar() {
+    // Dos notas cortas, sin fichero de sonido. El navegador no deja sonar
+    // nada hasta que se ha pulsado algo en la página: el primer pitido puede
+    // no oírse.
+    try {
+        audio = audio || new (window.AudioContext || window.webkitAudioContext)();
+        audio.resume?.();
+        [0, 0.25].forEach((desfase, n) => {
+            const nota = audio.createOscillator();
+            const volumen = audio.createGain();
+            const inicio = audio.currentTime + desfase;
+            nota.frequency.value = n ? 1175 : 880;
+            volumen.gain.setValueAtTime(0.0001, inicio);
+            volumen.gain.exponentialRampToValueAtTime(0.25, inicio + 0.02);
+            volumen.gain.exponentialRampToValueAtTime(0.0001, inicio + 0.2);
+            nota.connect(volumen).connect(audio.destination);
+            nota.start(inicio);
+            nota.stop(inicio + 0.22);
+        });
+    } catch {
+        // Sin audio: queda la bolita.
+    }
+}
+
+// Cada cuánto pita mientras haya conversaciones sin atender.
+const CADA_MS = 20000;
+
+export class GtsBuzon extends Component {
+    static template = "gts_chatroom.Buzon";
+    static props = {};
+
+    setup() {
+        super.setup();
+        this.store = useService("mail.store");
+        this.orm = useService("orm");
+        this.filtro = useState(filtro);
+        this.estado = useState({
+            buzones: [],
+            silencio: Boolean(leerNumero(CLAVE_SILENCIO)),
+        });
+        onWillStart(async () => {
+            if (!vista.soloChatroom) {
+                return;
+            }
+            this.estado.buzones = await this.orm.call("discuss.channel", "gts_buzones", []);
+            // Un buzón guardado que ya no existe no puede dejar el lateral vacío.
+            if (!this.estado.buzones.some((b) => b.id === this.filtro.canal)) {
+                this.filtro.canal = false;
+            }
+        });
+        onMounted(() => {
+            this.reloj = browser.setInterval(() => this.avisar(), CADA_MS);
+            this.avisar();
+        });
+        onWillUnmount(() => browser.clearInterval(this.reloj));
+    }
+
+    get visible() {
+        return vista.soloChatroom && this.estado.buzones.length > 0;
+    }
+
+    get buzon() {
+        const buzones = this.estado.buzones;
+        return buzones.find((b) => b.id === this.filtro.canal) || (buzones.length === 1 && buzones[0]);
+    }
+
+    get pendientes() {
+        return (this.store.discuss.gts_esperando?.threads || []).filter(delBuzon).length;
+    }
+
+    avisar() {
+        if (this.visible && this.pendientes && !this.estado.silencio) {
+            pitar();
+        }
+    }
+
+    elegir(ev) {
+        this.filtro.canal = parseInt(ev.target.value) || false;
+        try {
+            browser.localStorage.setItem(CLAVE_BUZON, this.filtro.canal || "");
+        } catch {
+            // Sin almacenamiento: vale para esta pestaña.
+        }
+    }
+
+    silenciar() {
+        this.estado.silencio = !this.estado.silencio;
+        try {
+            browser.localStorage.setItem(CLAVE_SILENCIO, this.estado.silencio ? "1" : "");
+        } catch {
+            // Sin almacenamiento: vale para esta pestaña.
+        }
+        if (!this.estado.silencio) {
+            pitar();
+        }
+    }
+
+    abrirPendiente() {
+        const thread = (this.store.discuss.gts_esperando?.threads || []).find(delBuzon);
+        thread?.setAsDiscussThread();
+    }
+}
+
+discussSidebarItemsRegistry.add("gts_buzon", GtsBuzon, { sequence: 15 });
 
 // ---------------------------------------------------------------------
 // Nueva conversación
@@ -242,6 +396,22 @@ async function cambiarRelevo(owner, thread, metodo) {
 }
 
 threadActionsRegistry
+    .add("gts-pasar", {
+        condition: ({ owner, thread }) =>
+            esDelPortal(owner, thread) && thread.gts_cola !== "resuelta",
+        icon: "fa fa-fw fa-share",
+        iconLarge: "fa fa-fw fa-lg fa-share",
+        name: _t("Pasar a otra persona"),
+        async open({ owner, thread }) {
+            const accion = await owner.env.services.orm.call(
+                "discuss.channel",
+                "action_gts_pasar",
+                [[thread.id]]
+            );
+            await owner.env.services.action.doAction(accion);
+        },
+        sequence: 8,
+    })
     .add("gts-atender", {
         condition: ({ owner, thread }) =>
             esDelPortal(owner, thread) && !(thread.gts_cola === "asignada" && esMia(thread)),

@@ -10,4 +10,32 @@
         </div>
     </t>
 
+    <t t-name="gts_chatroom.Buzon">
+        <div t-if="visible" class="o-gts-Buzon mx-2 mb-2 p-2 rounded border bg-view">
+            <div class="d-flex align-items-center gap-1">
+                <i class="fa fa-inbox opacity-75" role="presentation"/>
+                <t t-if="!store.discuss.isSidebarCompact">
+                    <select t-if="estado.buzones.length > 1" class="form-select form-select-sm fw-bold" t-on-change="(ev) => this.elegir(ev)" title="Buzón">
+                        <option value="" t-att-selected="!filtro.canal">Todos los buzones</option>
+                        <t t-foreach="estado.buzones" t-as="b" t-key="b.id">
+                            <option t-att-value="b.id" t-att-selected="b.id === filtro.canal" t-esc="b.nombre"/>
+                        </t>
+                    </select>
+                    <span t-else="" class="fw-bold text-truncate" t-esc="buzon.nombre"/>
+                    <span class="flex-grow-1"/>
+                    <button class="btn btn-link btn-sm p-0 text-reset opacity-75" t-on-click="() => this.silenciar()" t-att-title="estado.silencio ? 'Activar el pitido' : 'Silenciar el pitido'">
+                        <i t-attf-class="fa fa-fw {{ estado.silencio ? 'fa-bell-slash' : 'fa-bell' }}" role="presentation"/>
+                    </button>
+                </t>
+            </div>
+            <div t-if="buzon and !store.discuss.isSidebarCompact" class="small text-muted text-truncate" t-esc="buzon.canal"/>
+            <button t-if="pendientes" class="o-gts-Buzon-aviso btn btn-sm btn-link p-0 mt-1 d-flex align-items-center gap-1 text-danger fw-bold text-decoration-none" t-on-click="() => this.abrirPendiente()" title="Abrir la primera que espera">
+                <span class="o-gts-Buzon-bolita" role="presentation"/>
+                <t t-if="!store.discuss.isSidebarCompact">
+                    <t t-esc="pendientes"/> sin atender
+                </t>
+            </button>
+        </div>
+    </t>
+
 </templates>

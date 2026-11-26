@@ -9,3 +9,4 @@ access_gts_chatroom_comunicado_destinatario_user,gts.chatroom.comunicado.destina
 access_gts_chatroom_comunicado_dato_user,gts.chatroom.comunicado.dato usuario,model_gts_chatroom_comunicado_dato,mail_gateway.gateway_user,1,1,1,1
 access_gts_chatroom_nueva_user,gts.chatroom.nueva usuario,model_gts_chatroom_nueva,mail_gateway.gateway_user,1,1,1,1
 access_gts_chatroom_nueva_dato_user,gts.chatroom.nueva.dato usuario,model_gts_chatroom_nueva_dato,mail_gateway.gateway_user,1,1,1,1
+access_gts_chatroom_pasar_user,gts.chatroom.pasar usuario,model_gts_chatroom_pasar,mail_gateway.gateway_user,1,1,1,1

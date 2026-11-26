@@ -1,0 +1,21 @@
+/* La bolita roja del buzón mientras haya conversaciones sin atender. */
+.o-gts-Buzon-bolita {
+    display: inline-block;
+    width: 0.7rem;
+    height: 0.7rem;
+    border-radius: 50%;
+    background: #dc3545;
+    animation: o-gts-parpadeo 1s ease-in-out infinite;
+}
+
+@keyframes o-gts-parpadeo {
+    0%,
+    100% {
+        opacity: 1;
+        box-shadow: 0 0 0 0 rgba(220, 53, 69, 0.6);
+    }
+    50% {
+        opacity: 0.35;
+        box-shadow: 0 0 0 0.35rem rgba(220, 53, 69, 0);
+    }
+}

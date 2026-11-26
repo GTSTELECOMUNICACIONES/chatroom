@@ -60,4 +60,25 @@
         <field name="view_mode">form</field>
         <field name="target">new</field>
     </record>
+
+    <!-- «Pasar a otra persona», desde la cabecera del chat (26-11-2026). -->
+    <record id="gts_chatroom_pasar_form" model="ir.ui.view">
+        <field name="name">gts.chatroom.pasar.form</field>
+        <field name="model">gts.chatroom.pasar</field>
+        <field name="arch" type="xml">
+            <form string="Pasar a otra persona">
+                <group name="pasar">
+                    <field name="canal_id" readonly="1" options="{'no_open': True}" />
+                    <field name="usuario_id" options="{'no_create': True, 'no_open': True}" />
+                </group>
+                <div class="text-muted small">
+                    La conversación pasa a su «Para mí» y queda anotado quién se la pasó.
+                </div>
+                <footer>
+                    <button name="accion_pasar" type="object" string="Pasar" class="btn-primary" />
+                    <button special="cancel" string="Cancelar" class="btn-secondary" />
+                </footer>
+            </form>
+        </field>
+    </record>
 </odoo>

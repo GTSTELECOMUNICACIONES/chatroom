@@ -226,6 +226,51 @@ class DiscussChannel(models.Model):
             "id": self.id,
             "gts_cola": self.alma_cola or False,
             "gts_asignado_a": (self.alma_asignado_a or "").lower() or False,
+            "gts_canal_id": self.gateway_id.id or False,
+        }
+
+    @api.model
+    def gts_buzones(self):
+        """Los buzones (canales del portal) para la cabecera de Chats: su
+        nombre, el número por el que se atiende y cuántas esperan. Con sudo:
+        la pasarela solo la lee un administrador. Si el usuario es miembro de
+        alguno, solo esos."""
+        if not self.env.user.has_group("mail_gateway.gateway_user"):
+            return []
+        canales = (
+            self.env["mail.gateway"]
+            .sudo()
+            .search(
+                [
+                    ("gateway_type", "=", "alma"),
+                    ("integrated_webhook_state", "=", "integrated"),
+                ],
+                order="id",
+            )
+        )
+        mios = canales.filtered(lambda g: self.env.user in g.member_ids)
+        esperando = self.env["mail.gateway"]._gts_esperando_por_canal()
+        return [
+            {
+                "id": canal.id,
+                "nombre": canal.name or canal.canal_etiqueta,
+                "canal": canal.canal_etiqueta,
+                "numero": canal.canal_numero or "",
+                "esperando": esperando.get(canal.id, 0),
+            }
+            for canal in (mios or canales)
+        ]
+
+    def action_gts_pasar(self):
+        """Abre «Pasar a otra persona»."""
+        self.ensure_one()
+        return {
+            "type": "ir.actions.act_window",
+            "name": self.env._("Pasar a otra persona"),
+            "res_model": "gts.chatroom.pasar",
+            "view_mode": "form",
+            "target": "new",
+            "context": {"default_canal_id": self.id},
         }
 
     def _to_store(self, store: Store, fields):
@@ -263,11 +308,15 @@ class DiscussChannel(models.Model):
     def action_alma_resolver(self):
         return self._alma_cambiar_relevo("resuelta")
 
-    def _alma_cambiar_relevo(self, relevo):
+    def _alma_cambiar_relevo(self, relevo, para=None):
         """LA COPIA DE ODOO NUNCA SE ADELANTA AL PORTAL. Primero se le pide el
         cambio al portal; solo si lo acepta se toca la conversacion aqui. Si
         falla, el error sube como UserError, la transaccion se deshace y la
-        conversacion se queda como estaba."""
+        conversacion se queda como estaba.
+
+        `para`: pasarla a otra persona (David, 26-11-2026). Es el mismo
+        relevo «humano» con el correo de esa persona en `asignado_a`; si no es
+        miembro de la cuenta en el portal, vuelve «operador_no_es_miembro»."""
         self.ensure_one()
         if not self.alma_es:
             raise UserError(self.env._("Esta conversación no es del portal de Alma."))
@@ -290,7 +339,8 @@ class DiscussChannel(models.Model):
                     "pasarela."
                 )
             )
-        usuario = self.env.user
+        usuario = para or self.env.user
+        quien = self.env.user
         # La hora de ANTES de llamar: cualquier evento que el portal emita
         # despues de aplicar el cambio sera mas nuevo y pisara a este.
         antes_de_llamar = fields.Datetime.now()
@@ -329,7 +379,13 @@ class DiscussChannel(models.Model):
                     "next": {"type": "ir.actions.client", "tag": "soft_reload"},
                 },
             }
-        if relevo == "humano":
+        if relevo == "humano" and usuario != quien:
+            texto = self.env._(
+                "%(quien)s pasa la conversación a %(a)s.",
+                quien=quien.name,
+                a=usuario.name,
+            )
+        elif relevo == "humano":
             texto = self.env._("%s atiende la conversación.", usuario.name)
         elif relevo == "ia":
             texto = self.env._("%s devuelve la conversación a la IA.", usuario.name)
@@ -339,7 +395,7 @@ class DiscussChannel(models.Model):
         # Tipo «notification»: la pasarela de la OCA no manda esas al cliente.
         self.sudo().with_context(no_gateway_notification=True).message_post(
             body=Markup("<p>%s</p>") % texto,
-            author_id=usuario.partner_id.id,
+            author_id=quien.partner_id.id,
             message_type="notification",
             subtype_xmlid="mail.mt_note",
         )
