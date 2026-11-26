@@ -108,6 +108,14 @@ class GtsChatroomPlantillaAlta(models.Model):
     # bloqueado). Lo que copia el portal lo pone a False en `create`.
     creada_en_odoo = fields.Boolean(default=True, readonly=True, copy=False)
     editable = fields.Boolean(compute="_compute_editable")
+    # MODIFICAR UNA QUE YA ESTÁ EN META (David y Carlos, 26-11-2026), como
+    # «Volver a borrador» del WhatsApp oficial. Mientras se modifica no se
+    # envía: el texto de aquí ya no es el que Meta tiene aprobado.
+    en_modificacion = fields.Boolean(readonly=True, copy=False)
+    # Lo que había al pulsar «Modificar», para «Descartar cambios».
+    copia_antes = fields.Json(readonly=True, copy=False)
+    # 409 del portal: lo que se perdería en Meta (pie, cabecera, botones).
+    perderia = fields.Char(readonly=True, copy=False)
     categoria_alta = fields.Selection(
         CATEGORIAS_ALTA,
         "Categoría",
@@ -156,13 +164,15 @@ class GtsChatroomPlantillaAlta(models.Model):
         help="Minúsculas y guiones bajos: así lo pide Meta.",
     )
 
-    @api.depends("creada_en_odoo", "alma_id")
+    @api.depends("creada_en_odoo", "alma_id", "en_modificacion")
     def _compute_editable(self):
-        # Una plantilla ya en Meta NO se edita, ni rechazada: Meta no lo deja
-        # y tampoco deja reusar su nombre (Carlos, 26-11-2026). Se duplica,
-        # que crea un borrador con otro nombre.
+        # Una plantilla ya en Meta solo se edita tras «Modificar». El nombre,
+        # el idioma y la categoría no cambian nunca (la vista lo bloquea con
+        # `alma_id`): para eso se duplica.
         for plantilla in self:
-            plantilla.editable = plantilla.creada_en_odoo and not plantilla.alma_id
+            plantilla.editable = plantilla.creada_en_odoo and (
+                not plantilla.alma_id or plantilla.en_modificacion
+            )
 
     def copy_data(self, default=None):
         vals_list = super().copy_data(default=default)
@@ -468,6 +478,8 @@ class GtsChatroomPlantillaAlta(models.Model):
                 self.env._("El canal %s no está integrado.", self.gateway_id.name)
             )
         self._comprobar_para_meta()
+        if self.alma_id:
+            return self._gts_enviar_modificacion()
         Alma = self.env["mail.gateway.alma"]
         try:
             respuesta = Alma._alma_peticion(
@@ -526,6 +538,185 @@ class GtsChatroomPlantillaAlta(models.Model):
                 "next": {"type": "ir.actions.client", "tag": "soft_reload"},
             },
         }
+
+    # ------------------------------------------------------------------
+    # Modificar una plantilla que ya está en Meta
+    # ------------------------------------------------------------------
+
+    def _gts_foto(self):
+        """Lo editable de la ficha, para poder volver atrás."""
+        self.ensure_one()
+        return {
+            "cuerpo": self.cuerpo or "",
+            "cabecera": self.cabecera or "",
+            "pie": self.pie or "",
+            "se_puede_enviar": self.se_puede_enviar,
+            "por_que_no": self.por_que_no or "",
+            "botones": [
+                {
+                    "sequence": b.sequence,
+                    "tipo": b.tipo,
+                    "texto": b.texto,
+                    "valor": b.valor or "",
+                }
+                for b in self.boton_ids
+            ],
+            "ejemplos": {str(v.posicion): v.ejemplo or "" for v in self.variable_ids},
+        }
+
+    def accion_modificar(self):
+        self.ensure_one()
+        if not (self.creada_en_odoo and self.alma_id) or self.en_modificacion:
+            raise UserError(
+                self.env._(
+                    "Solo se modifican las plantillas creadas desde Odoo que ya "
+                    "están en Meta. Las demás se duplican."
+                )
+            )
+        if self.estado in ("pendiente", "en_revision", "PENDING", "pending"):
+            raise UserError(
+                self.env._(
+                    "Meta todavía la está revisando: espera a que conteste para "
+                    "modificarla."
+                )
+            )
+        self.write(
+            {
+                "copia_antes": self._gts_foto(),
+                "en_modificacion": True,
+                "perderia": False,
+                "se_puede_enviar": False,
+                "por_que_no": self.env._(
+                    "Se está modificando: no se envía hasta mandar los cambios "
+                    "a Meta y que los apruebe, o hasta descartarlos."
+                ),
+            }
+        )
+        return True
+
+    def accion_descartar_cambios(self):
+        self.ensure_one()
+        foto = self.copia_antes if isinstance(self.copia_antes, dict) else {}
+        vals = {
+            "en_modificacion": False,
+            "copia_antes": False,
+            "perderia": False,
+        }
+        if foto:
+            vals.update(
+                cuerpo=foto.get("cuerpo") or False,
+                cabecera=foto.get("cabecera") or False,
+                pie=foto.get("pie") or False,
+                se_puede_enviar=bool(foto.get("se_puede_enviar")),
+                por_que_no=foto.get("por_que_no") or False,
+                boton_ids=[(5, 0, 0)] + [(0, 0, b) for b in foto.get("botones") or []],
+            )
+        self.write(vals)
+        ejemplos = foto.get("ejemplos") or {}
+        for variable in self.variable_ids:
+            if str(variable.posicion) in ejemplos:
+                variable.ejemplo = ejemplos[str(variable.posicion)]
+        return True
+
+    def _gts_enviar_modificacion(self):
+        """PUT /api/odoo/plantillas/{id} (Carlos, 26-11-2026): Meta REEMPLAZA
+        todos los componentes, así que va la plantilla ENTERA, con todas las
+        claves aunque estén vacías; lo que faltara se borraría. Sin nombre,
+        idioma ni categoría: no se editan."""
+        Alma = self.env["mail.gateway.alma"]
+        cuerpo = self._cuerpo_para_el_portal()
+        for clave in ("nombre", "idioma", "categoria"):
+            cuerpo.pop(clave, None)
+        if self.env.context.get("gts_confirmo_borrar"):
+            cuerpo["confirmo_borrar"] = True
+        try:
+            respuesta = Alma._alma_peticion(
+                self.gateway_id.sudo(),
+                "PUT",
+                f"/api/odoo/plantillas/{self.alma_id}",
+                json=cuerpo,
+            )
+        except Exception as error:  # noqa: BLE001 - se explica, no se pierde
+            raise UserError(
+                self.env._(
+                    "No llegó la respuesta del portal (%s). Puede que los cambios "
+                    "SÍ se mandaran: espera unos minutos y mira el estado antes de "
+                    "volver a enviarlos.",
+                    error,
+                )
+            ) from error
+        datos = Alma._alma_json(respuesta)
+        # Los códigos del portal van en `alma_motivo`, como en el relevo.
+        codigo = datos.get("alma_motivo") or datos.get("error")
+        if respuesta.status_code == 409 and codigo == "perderia_componentes":
+            # No es un error definitivo: si de verdad se quiere quitar, se
+            # confirma con un paso más. En Meta no se deshace sin gastar
+            # otra modificación.
+            perdidos = datos.get("componentes") or datos.get("perderia")
+            if isinstance(perdidos, list):
+                perdidos = ", ".join(str(c) for c in perdidos)
+            self.perderia = (
+                perdidos
+                or datos.get("detalle")
+                or self.env._("parte de la plantilla que ahora no se manda")
+            )
+            return {
+                "type": "ir.actions.client",
+                "tag": "soft_reload",
+            }
+        if respuesta.status_code == 429 or codigo == "cupo_de_ediciones":
+            proxima = datos.get("proxima_desde")
+            raise UserError(
+                self.env._(
+                    "Meta no deja modificarla más por ahora (10 cambios cada 30 "
+                    "días y 1 cada 24 horas en una aprobada).%s Si no puedes "
+                    "esperar, descarta los cambios y duplícala.",
+                    self.env._(" Se podrá desde %s.", proxima) if proxima else "",
+                )
+            )
+        if not Alma._alma_ok(respuesta, datos):
+            fallos = datos.get("fallos")
+            if isinstance(fallos, list) and fallos:
+                raise UserError(
+                    self.env._("El portal no la acepta:")
+                    + "\n"
+                    + "\n".join(f"• {f}" for f in fallos)
+                )
+            raise UserError(Alma._alma_texto_error(respuesta, datos))
+        self.write(
+            {
+                "estado": datos.get("estado") or "pendiente",
+                "motivo": False,
+                "en_modificacion": False,
+                "copia_antes": False,
+                "perderia": False,
+                "se_puede_enviar": False,
+                "por_que_no": False,
+            }
+        )
+        cron = self.env.ref(
+            "gts_chatroom.ir_cron_sincronizar_plantillas", raise_if_not_found=False
+        )
+        if cron:
+            cron.sudo()._trigger(at=fields.Datetime.now() + timedelta(minutes=2))
+        return {
+            "type": "ir.actions.client",
+            "tag": "display_notification",
+            "params": {
+                "title": self.env._("Cambios enviados a Meta"),
+                "type": "success",
+                "message": datos.get("aviso")
+                or self.env._(
+                    "No se puede enviar hasta que Meta la vuelva a aprobar "
+                    "(suelen ser un par de minutos). El estado se actualiza solo."
+                ),
+                "next": {"type": "ir.actions.client", "tag": "soft_reload"},
+            },
+        }
+
+    def accion_enviar_quitando(self):
+        """Tras el 409: sí, quitar de Meta lo que ya no está en la ficha."""
+        return self.with_context(gts_confirmo_borrar=True).accion_enviar_aprobacion()
 
     # ------------------------------------------------------------------
     # «Enviar WhatsApp» en el menú Acción de los modelos que la usan

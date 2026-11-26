@@ -271,6 +271,20 @@ class GtsChatroomPlantilla(models.Model):
                 [("gateway_id", "=", gateway.id), ("alma_id", "=", vals["alma_id"])],
                 limit=1,
             )
+            if plantilla.en_modificacion:
+                # Alguien la está modificando aquí: el texto del portal es el
+                # viejo y no puede pisar lo que se está escribiendo, ni
+                # volver a dejarla para enviar.
+                for clave in (
+                    "name",
+                    "cuerpo",
+                    "cabecera",
+                    "variables_cuerpo",
+                    "ejemplos",
+                    "se_puede_enviar",
+                    "por_que_no",
+                ):
+                    vals.pop(clave, None)
             if not plantilla:
                 # UN BORRADOR QUE YA SE PRESENTÓ y cuya respuesta no llegó
                 # (corte, tiempo agotado): está en Meta y aquí sin id. Se le

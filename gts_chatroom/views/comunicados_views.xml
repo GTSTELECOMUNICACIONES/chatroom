@@ -29,11 +29,27 @@
         <field name="arch" type="xml">
             <form>
                 <header>
-                    <button name="accion_enviar_aprobacion" type="object" string="Enviar para aprobación" class="btn-primary" invisible="not editable" />
+                    <button name="accion_enviar_aprobacion" type="object" string="Enviar para aprobación" class="btn-primary" invisible="not editable or alma_id" />
+                    <!-- Modificar una que ya está en Meta. En una APROBADA
+                         cuesta: deja de enviarse hasta que Meta la reaprueba y
+                         gasta uno de sus cambios. En una rechazada o pausada no
+                         cuesta nada, y no se avisa (Carlos, 26-11-2026). -->
+                    <button name="accion_enviar_aprobacion" type="object" string="Enviar cambios a Meta" class="btn-primary" invisible="not en_modificacion or estado != 'aprobada'" confirm="Al enviar los cambios, la plantilla deja de poder usarse hasta que Meta la vuelva a aprobar (suelen ser un par de minutos, sin garantía). Gasta uno de sus 10 cambios de este mes, y si sale mal no se puede volver a modificar hasta mañana. ¿Enviar?" />
+                    <button name="accion_enviar_aprobacion" type="object" string="Enviar cambios a Meta" class="btn-primary" invisible="not en_modificacion or estado == 'aprobada'" />
+                    <button name="accion_descartar_cambios" type="object" string="Descartar cambios" invisible="not en_modificacion" />
+                    <button name="accion_modificar" type="object" string="Modificar" invisible="not creada_en_odoo or not alma_id or en_modificacion or estado in ('pendiente', 'en_revision', 'PENDING', 'pending')" />
                     <field name="estado" widget="badge" readonly="1" />
                 </header>
                 <sheet>
                     <field name="editable" invisible="1" />
+                    <field name="en_modificacion" invisible="1" />
+                    <div class="alert alert-warning" role="status" invisible="not en_modificacion">
+                        Modificando una plantilla que ya está en Meta. Mientras tanto no se puede enviar. Cuando termines, «Enviar cambios a Meta»; o «Descartar cambios» para dejarla como estaba. El nombre, el idioma y la categoría no se pueden cambiar: para eso, duplícala.
+                    </div>
+                    <div class="alert alert-danger" role="alert" invisible="not perderia">
+                        <p class="mb-2">Meta borraría de la plantilla: <field name="perderia" class="d-inline fw-bold" readonly="1" />. Si ha sido sin querer, vuelve a ponerlo antes de enviar. Si quieres quitarlo de verdad:</p>
+                        <button name="accion_enviar_quitando" type="object" string="Sí, quitarlo y enviar" class="btn-danger btn-sm" confirm="Lo quitado no se recupera en Meta sin gastar otro cambio. ¿Seguro?" />
+                    </div>
                     <field name="creada_en_odoo" invisible="1" />
                     <field name="modelo" invisible="1" />
                     <div class="alert alert-warning" role="alert" invisible="se_puede_enviar or not alma_id or not por_que_no">
@@ -52,15 +68,15 @@
                         Borrador. Obligatorio: nombre, categoría, idioma y texto, y un ejemplo para cada {{dato}} del texto (pestaña «Datos»). Opcional: cabecera, pie y botones. Al guardar, pulsa «Enviar para aprobación»: Meta suele contestar en minutos y puede cambiar la categoría; la que quede es la que se cobra.
                     </div>
                     <label for="name" string="Nombre" />
-                    <h1><field name="name" readonly="not editable" placeholder="p. ej. Recordatorio de clase" /></h1>
-                    <div class="text-muted small" invisible="not editable">Para Meta: <field name="nombre_meta" class="d-inline" /></div>
+                    <h1><field name="name" readonly="not editable or alma_id" placeholder="p. ej. Recordatorio de clase" /></h1>
+                    <div class="text-muted small" invisible="not editable or alma_id">Para Meta: <field name="nombre_meta" class="d-inline" /></div>
                     <group name="principal_1">
                         <group name="meta">
                             <field name="gateway_id" readonly="alma_id" options="{'no_create': True, 'no_open': True}" />
-                            <field name="categoria_alta" invisible="not editable" required="editable" />
-                            <field name="categoria_texto" invisible="editable" />
-                            <field name="idioma_alta" invisible="not editable" required="editable" />
-                            <field name="idioma" invisible="editable" />
+                            <field name="categoria_alta" invisible="not editable or alma_id" required="editable and not alma_id" />
+                            <field name="categoria_texto" invisible="editable and not alma_id" />
+                            <field name="idioma_alta" invisible="not editable or alma_id" required="editable and not alma_id" />
+                            <field name="idioma" invisible="editable and not alma_id" />
                             <field name="alma_id" invisible="1" />
                         </group>
                         <group name="uso">
