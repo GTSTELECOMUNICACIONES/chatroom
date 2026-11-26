@@ -57,22 +57,26 @@ def nombre_meta(nombre):
     return re.sub(r"[^a-z0-9]+", "_", texto).strip("_")[:512]
 
 
+# La forma jurídica al final del nombre: «MARLON KART S.L», «Talleres SA».
+FORMA_JURIDICA = re.compile(
+    r"\b(S\.?\s?L\.?\s?U?|S\.?\s?A\.?\s?U?|S\.?\s?COOP|C\.?\s?B|S\.?\s?C|"
+    r"LTD|GMBH|INC|LLC)\.?\s*$",
+    re.IGNORECASE,
+)
+
+
 def solo_nombre_de_pila(registro, ruta, texto):
     """«Antonio Jiménez Arellano» → «Antonio» (David, 26-11-2026: «Hola
-    Antonio Jiménez Arellano» no es como se le habla a nadie). Una EMPRESA
-    se queda entera: «Hola MARLON» no es mejor que «Hola MARLON KART S.L»."""
-    contacto = registro
-    for trozo in (ruta or "").split(".")[:-1]:
-        if not isinstance(contacto, models.BaseModel) or trozo not in contacto._fields:
-            break
-        contacto = contacto[:1][trozo]
-    if (
-        isinstance(contacto, models.BaseModel)
-        and contacto._name == "res.partner"
-        and contacto[:1].is_company
-    ):
+    Antonio Jiménez Arellano» no es como se le habla a nadie).
+
+    Una EMPRESA se queda entera («Hola MARLON KART S.L», no «Hola MARLON»),
+    pero se reconoce por la FORMA JURÍDICA del nombre, no por la casilla
+    «Es una empresa»: en GTS Racing había personas marcadas como empresa y
+    a Antonio le salía el nombre entero."""
+    texto = (texto or "").strip()
+    if FORMA_JURIDICA.search(texto):
         return texto
-    return (texto or "").split(" ")[0]
+    return texto.split(" ")[0]
 
 
 def valor_de_campo(registro, ruta):
