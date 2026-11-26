@@ -870,6 +870,19 @@ class MailGatewayAlma(models.AbstractModel):
                 )
             ) from error
         datos = self._alma_json(respuesta)
+        estado = datos.get("estado") if isinstance(datos.get("estado"), dict) else {}
+        if (
+            datos.get("alma_motivo") == "operador_no_es_miembro"
+            and cuerpo.get("asignado_a")
+            and str(estado.get("asignado_a") or "").lower()
+            == str(cuerpo["asignado_a"]).lower()
+        ):
+            # OPERADOR DE ODOO SIN CUENTA EN EL PORTAL (Carlos, 26-11-2026): el
+            # portal ya lo guarda como operador externo y la conversación
+            # queda asignada a él, aunque conteste 409. Para un cliente que
+            # atiende todo desde Odoo es lo normal, no un error: avisar en
+            # cada «Atender» enseñaría a no leer los avisos.
+            return datos, None
         if not 200 <= respuesta.status_code < 300:
             error = self._alma_texto_error_relevo(respuesta, datos, cuerpo)
             if not isinstance(datos.get("estado"), dict):

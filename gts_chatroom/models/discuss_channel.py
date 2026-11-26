@@ -211,6 +211,8 @@ class DiscussChannel(models.Model):
         elif self.alma_cola != "esperando":
             self.sudo().alma_esperando_desde = False
             self._alma_cerrar_aviso()
+        if self.alma_cola == "resuelta" and antes != "resuelta":
+            self._gts_cerrar_para_todos()
 
     # ------------------------------------------------------------------
     # La cola en la pantalla de Chats (David, 26-11-2026)
@@ -278,6 +280,16 @@ class DiscussChannel(models.Model):
         for canal in self.filtered("alma_es"):
             store.add_model_values(self._name, canal._gts_datos_cola())
         return res
+
+    def _gts_cerrar_para_todos(self):
+        """RESUELTA = CERRADA (David, 26-11-2026): se quita del lateral de
+        todos los operadores, como cerrar un chat. No se borra nada: si el
+        cliente vuelve a escribir, el mensaje nuevo la vuelve a fijar
+        (`is_pinned` compara con `last_interest_dt` del canal) y entra otra
+        vez por su cola."""
+        ahora = fields.Datetime.now()
+        for canal in self.sudo():
+            canal.channel_member_ids.filtered("partner_id").write({"unpin_dt": ahora})
 
     def _gts_avisar_cola(self):
         """La conversación cambia de apartado en el lateral sin recargar."""
