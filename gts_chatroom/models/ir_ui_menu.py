@@ -5,9 +5,10 @@ from odoo import models
 _logger = logging.getLogger(__name__)
 
 MENU_ESPERANDO = "gts_chatroom.menu_chatroom_esperando"
-# La versión va en «Configuración», no en el nombre de la aplicación: en el
-# icono del inicio quedaba feo (David, 26-11-2026).
-MENU_VERSION = "gts_chatroom.menu_chatroom_config"
+# La versión va en un menú propio al final de la barra, visible para todo el
+# que usa el ChatRoom, y no en el nombre de la aplicación: en el icono del
+# inicio quedaba feo (David, 26-11-2026).
+MENU_VERSION = "gts_chatroom.menu_chatroom_version"
 
 
 class IrUiMenu(models.Model):
@@ -48,8 +49,9 @@ class IrUiMenu(models.Model):
         return menus
 
     def _alma_version_en_el_menu(self, menus):
-        """La version dentro del modulo, en el menu «Configuración ·
-        v0.11.5». Cuando un cliente llama con un problema, se le pregunta y
+        """La version dentro del modulo, en un menu «v0.11.7» al final de la
+        barra que ve cualquier operador. Cuando un cliente llama con un
+        problema, se le pregunta y
         la ve sin entrar en Aplicaciones (David, 21-11-2026). Antes iba en el
         nombre de la aplicacion y salia tambien en el icono del inicio, que
         quedaba feo (26-11-2026). Sale de la version INSTALADA, no del
@@ -69,8 +71,34 @@ class IrUiMenu(models.Model):
             _logger.exception("ChatRoom: no se pudo leer la version")
             return
         if version:
-            corta = version.split(".", 2)[2] if version.count(".") >= 3 else version
-            raiz["name"] = f"{raiz['name']} · v{corta}"
+            raiz["name"] = f"v{self._gts_version_corta(version)}"
+
+    def _gts_version_corta(self, version):
+        """«19.0.0.11.7» → «0.11.7»."""
+        return version.split(".", 2)[2] if version.count(".") >= 3 else version
+
+    def _gts_aviso_de_version(self):
+        """Al pulsar el menú de la versión: lo que hay que decir al reportar."""
+        version = (
+            self.env["ir.module.module"]
+            .sudo()
+            .search([("name", "=", "gts_chatroom")], limit=1)
+            .latest_version
+        )
+        return {
+            "type": "ir.actions.client",
+            "tag": "display_notification",
+            "params": {
+                "title": self.env._(
+                    "ChatRoom v%s", self._gts_version_corta(version or "?")
+                ),
+                "message": self.env._(
+                    "Si vas a reportar un problema, indica esta versión y, si "
+                    "puedes, una captura de lo que ves."
+                ),
+                "type": "info",
+            },
+        }
 
     def _gts_contadores_de_bandejas(self, menus):
         """«Sin atender (3)» en la bandeja de cada canal, y el total en el

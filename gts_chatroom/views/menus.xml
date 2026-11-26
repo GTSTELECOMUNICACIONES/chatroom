@@ -73,6 +73,22 @@
          portal es la de agentes de voz y no le dice nada a un cliente del
          ChatRoom. Vuelve cuando exista la del monedero; el método
          `mail.gateway._gts_abrir_portal` sigue escrito. -->
+    <!-- La versión, para que cualquiera la diga al reportar un problema. El
+         nombre («v0.11.7») lo pone models/ir_ui_menu.py al cargar los menús. -->
+    <record id="action_chatroom_version" model="ir.actions.server">
+        <field name="name">Versión del ChatRoom</field>
+        <field name="model_id" ref="base.model_ir_ui_menu" />
+        <field name="state">code</field>
+        <field name="code">action = model._gts_aviso_de_version()</field>
+        <field name="group_ids" eval="[(4, ref('mail_gateway.gateway_user'))]" />
+    </record>
+    <menuitem
+        id="menu_chatroom_version"
+        name="Versión"
+        parent="menu_chatroom_root"
+        action="action_chatroom_version"
+        sequence="99"
+    />
     <menuitem
         id="menu_chatroom_config"
         name="Configuración"
