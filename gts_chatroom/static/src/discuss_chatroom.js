@@ -435,6 +435,27 @@ async function cambiarRelevo(owner, thread, metodo) {
 }
 
 threadActionsRegistry
+    .add("gts-descartar", {
+        // Una conversación abierta desde «Nueva conversación» a la que no se
+        // llegó a escribir: el portal aún no la conoce (sin cola).
+        condition: ({ owner, thread }) =>
+            thread?.model === "discuss.channel" &&
+            thread.channel_type === "gateway" &&
+            !thread.gts_cola &&
+            vista.soloChatroom &&
+            (!owner.props.chatWindow || owner.props.chatWindow.isOpen),
+        icon: "fa fa-fw fa-trash-o",
+        iconLarge: "fa fa-fw fa-lg fa-trash-o",
+        name: _t("Descartar (no se le ha escrito nada)"),
+        async open({ owner, thread }) {
+            await owner.env.services.orm.call("discuss.channel", "action_gts_descartar", [
+                [thread.id],
+            ]);
+            thread.store.discuss.thread = undefined;
+            thread.delete();
+        },
+        sequence: 9,
+    })
     .add("gts-pasar", {
         condition: ({ owner, thread }) =>
             esDelPortal(owner, thread) && thread.gts_cola !== "resuelta",

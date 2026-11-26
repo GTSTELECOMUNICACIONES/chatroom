@@ -263,6 +263,36 @@ class DiscussChannel(models.Model):
             for canal in (mios or canales)
         ]
 
+    def action_gts_descartar(self):
+        """DESCARTAR UNA CONVERSACIÓN ABIERTA SIN ESCRIBIR (David,
+        26-11-2026): «Abrir la conversación» la crea, y si al final no se le
+        manda nada se queda en el lateral. Se borra SOLO si está vacía y el
+        portal no la conoce todavía; con mensajes, se cierra con «Resuelta»."""
+        self.ensure_one()
+        if not self.alma_es:
+            raise UserError(self.env._("Esta conversación no es del ChatRoom."))
+        con_mensajes = (
+            self.env["mail.message"]
+            .sudo()
+            .search_count(
+                [
+                    ("model", "=", "discuss.channel"),
+                    ("res_id", "=", self.id),
+                    ("message_type", "=", "comment"),
+                ],
+                limit=1,
+            )
+        )
+        if con_mensajes or self.alma_conversacion_id:
+            raise UserError(
+                self.env._(
+                    "Esta conversación ya tiene mensajes: no se borra. Ciérrala "
+                    "con «Dar por resuelta»."
+                )
+            )
+        self.sudo().unlink()
+        return True
+
     def action_gts_pasar(self):
         """Abre «Pasar a otra persona»."""
         self.ensure_one()

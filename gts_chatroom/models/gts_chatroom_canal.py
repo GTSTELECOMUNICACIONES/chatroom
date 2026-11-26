@@ -90,6 +90,14 @@ class MailGateway(models.Model):
         "nombre del canal.",
     )
     canal_etiqueta = fields.Char("Canal", compute="_compute_canal")
+    plantilla_inicio_id = fields.Many2one(
+        "gts.chatroom.plantilla",
+        "Plantilla para empezar conversaciones",
+        domain="[('gateway_id', '=', id), ('se_puede_enviar', '=', True)]",
+        help="La que sale ya elegida en «Nueva conversación». Lo cómodo es una "
+        "de utilidad tipo «Hola {{1}}, {{2}}», con el nombre del contacto en "
+        "el 1 y el mensaje en el 2.",
+    )
     bandeja_menu_id = fields.Many2one(
         "ir.ui.menu", "Menú de la bandeja", readonly=True, copy=False
     )

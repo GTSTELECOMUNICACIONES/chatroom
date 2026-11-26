@@ -18,6 +18,7 @@ que se escribe a mano (después del commit, con su acuse, su estado y su
 error a la vista), solo que `_send` manda `plantilla` en vez de `texto`.
 """
 
+import re
 from datetime import timedelta
 
 from markupsafe import Markup
@@ -70,7 +71,17 @@ class GtsChatroomNueva(models.TransientModel):
         "gts.chatroom.plantilla",
         "Plantilla",
         domain="[('id', 'in', plantilla_permitida_ids)]",
+        default=lambda self: (
+            self.env["res.partner"]._gts_pasarelas_alma()[:1].plantilla_inicio_id
+        ),
     )
+    # ESCRIBIR COMO EN UN CHAT (David, 26-11-2026): «con estas variables es
+    # incomodísimo». Si a la plantilla solo le falta UN dato por escribir
+    # (los demás salen de la ficha, como el nombre), ese dato es el mensaje
+    # y se escribe en un recuadro grande. Meta no admite saltos de línea en
+    # un dato: se juntan en una línea al enviar.
+    mensaje = fields.Text("Mensaje")
+    posicion_mensaje = fields.Integer(compute="_compute_posicion_mensaje")
     categoria_texto = fields.Char(related="plantilla_id.categoria_texto")
     variables = fields.Integer(related="plantilla_id.variables_cuerpo")
     ejemplo_texto = fields.Text(related="plantilla_id.ejemplo_texto")
@@ -193,7 +204,24 @@ class GtsChatroomNueva(models.TransientModel):
             )
         )
 
-    @api.onchange("plantilla_id")
+    @api.depends("plantilla_id")
+    def _compute_posicion_mensaje(self):
+        for nueva in self:
+            plantilla = nueva.plantilla_id
+            total = plantilla.variables_cuerpo or 0
+            por_campo = {
+                v.posicion for v in plantilla.variable_ids if v.origen == "campo"
+            }
+            libres = [n for n in range(1, total + 1) if n not in por_campo]
+            nueva.posicion_mensaje = libres[0] if len(libres) == 1 else 0
+
+    @staticmethod
+    def _en_una_linea(texto):
+        """Lo que Meta admite en un dato: sin saltos de línea, tabuladores ni
+        más de cuatro espacios seguidos."""
+        return re.sub(r"\s+", " ", texto or "").strip()
+
+    @api.onchange("plantilla_id", "partner_id")
     def _onchange_plantilla_datos(self):
         """Una casilla por dato, ya rellena con el campo de la ficha o con
         el texto por defecto de la plantilla."""
@@ -211,9 +239,15 @@ class GtsChatroomNueva(models.TransientModel):
         self.dato_ids = comandos
 
     def _lista_parametros(self):
-        return [(d.valor or "").strip() for d in self.dato_ids.sorted("posicion")]
+        valores = [(d.valor or "").strip() for d in self.dato_ids.sorted("posicion")]
+        n = self.posicion_mensaje
+        if n and len(valores) >= n:
+            valores[n - 1] = self._en_una_linea(self.mensaje)
+        return valores
 
-    @api.depends("plantilla_id.cuerpo", "dato_ids.valor", "dato_ids.posicion")
+    @api.depends(
+        "plantilla_id.cuerpo", "dato_ids.valor", "dato_ids.posicion", "mensaje"
+    )
     def _compute_vista_previa(self):
         for nueva in self:
             texto = nueva.plantilla_id.cuerpo or ""
@@ -298,6 +332,8 @@ class GtsChatroomNueva(models.TransientModel):
                 plantilla.por_que_no or self.env._("Esta plantilla no se puede enviar.")
             )
         valores = self._lista_parametros()
+        if self.posicion_mensaje and not self._en_una_linea(self.mensaje):
+            raise UserError(self.env._("Escribe el mensaje."))
         if len(valores) != (plantilla.variables_cuerpo or 0) or not all(valores):
             raise UserError(
                 self.env._(

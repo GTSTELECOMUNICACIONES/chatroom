@@ -45,6 +45,11 @@
                 <field name="canal_numero" invisible="gateway_type != 'alma'" />
                 <field name="canal_etiqueta" invisible="gateway_type != 'alma'" />
                 <field
+                    name="plantilla_inicio_id"
+                    invisible="gateway_type != 'alma'"
+                    options="{'no_create': True}"
+                />
+                <field
                     name="alma_url_entrada"
                     widget="CopyClipboardChar"
                     invisible="gateway_type != 'alma'"
