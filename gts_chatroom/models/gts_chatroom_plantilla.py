@@ -17,7 +17,7 @@ import logging
 from odoo import api, fields, models
 from odoo.exceptions import UserError
 
-from .mail_gateway_alma import _digitos
+from .mail_gateway_alma import _digitos, _fecha
 
 
 def _mismo_texto(uno, otro):
@@ -87,6 +87,13 @@ class GtsChatroomPlantilla(models.Model):
     ejemplo_texto = fields.Text("Ejemplo que vio Meta")
     se_puede_enviar = fields.Boolean("Se puede enviar")
     por_que_no = fields.Char("Por qué no se puede enviar")
+    # EL CUPO DE CAMBIOS DE META (Carlos, 26-11-2026), del GET de plantillas:
+    # 10 cada 30 días y 1 cada 24 h, SOLO en las aprobadas. `ediciones: null`
+    # no es cero: no aplica (rechazada, pausada) o no se pudo contar, y
+    # entonces no se enseña nada. `proxima_desde: null` es «ya».
+    ediciones_cuentan = fields.Boolean(readonly=True)
+    ediciones_quedan = fields.Integer("Cambios que quedan este mes", readonly=True)
+    ediciones_proxima = fields.Datetime("Próximo cambio desde", readonly=True)
     active = fields.Boolean(default=True)
 
     _alma_id_unico = models.Constraint(
@@ -212,6 +219,21 @@ class GtsChatroomPlantilla(models.Model):
         return True
 
     @api.model
+    def _gts_valores_ediciones(self, ediciones):
+        if not isinstance(ediciones, dict):
+            return {
+                "ediciones_cuentan": False,
+                "ediciones_quedan": 0,
+                "ediciones_proxima": False,
+            }
+        proxima = ediciones.get("proxima_desde")
+        return {
+            "ediciones_cuentan": True,
+            "ediciones_quedan": int(ediciones.get("quedan_30d") or 0),
+            "ediciones_proxima": _fecha(proxima) if proxima else False,
+        }
+
+    @api.model
     def _copiar_del_portal(self, gateway):
         """Devuelve (cuántas, aviso del portal). Las que el portal ya no
         devuelve se archivan, no se borran: un comunicado viejo la cita."""
@@ -265,6 +287,7 @@ class GtsChatroomPlantilla(models.Model):
                 "ejemplo_texto": item.get("ejemplo_texto") or False,
                 "se_puede_enviar": bool(item.get("se_puede_enviar")),
                 "por_que_no": item.get("por_que_no") or False,
+                **self._gts_valores_ediciones(item.get("ediciones")),
                 "active": True,
             }
             plantilla = Plantilla.search(

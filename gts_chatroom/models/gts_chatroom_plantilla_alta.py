@@ -652,14 +652,19 @@ class GtsChatroomPlantillaAlta(models.Model):
             # No es un error definitivo: si de verdad se quiere quitar, se
             # confirma con un paso más. En Meta no se deshace sin gastar
             # otra modificación.
-            perdidos = datos.get("componentes") or datos.get("perderia")
-            if isinstance(perdidos, list):
-                perdidos = ", ".join(str(c) for c in perdidos)
-            self.perderia = (
-                perdidos
-                or datos.get("detalle")
-                or self.env._("parte de la plantilla que ahora no se manda")
-            )
+            # SOLO `perderia`, lista de textos ya en castellano (Carlos). Sin
+            # alternativas: si cambia el nombre, que falle a la vista y no
+            # pregunte si se quiere borrar «nada».
+            perdidos = datos.get("perderia")
+            if not isinstance(perdidos, list) or not perdidos:
+                raise UserError(
+                    self.env._(
+                        "El portal dice que se perdería parte de la plantilla, "
+                        "pero no dice qué (falta «perderia» en su respuesta). No "
+                        "se ha enviado nada. Avisa a quien mantiene el ChatRoom."
+                    )
+                )
+            self.perderia = ", ".join(str(c) for c in perdidos)
             return {
                 "type": "ir.actions.client",
                 "tag": "soft_reload",

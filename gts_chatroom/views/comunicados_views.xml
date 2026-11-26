@@ -46,6 +46,11 @@
                     <div class="alert alert-warning" role="status" invisible="not en_modificacion">
                         Modificando una plantilla que ya está en Meta. Mientras tanto no se puede enviar. Cuando termines, «Enviar cambios a Meta»; o «Descartar cambios» para dejarla como estaba. El nombre, el idioma y la categoría no se pueden cambiar: para eso, duplícala.
                     </div>
+                    <div class="alert alert-info py-2" role="status" invisible="not ediciones_cuentan or (not en_modificacion and not creada_en_odoo)">
+                        <field name="ediciones_cuentan" invisible="1" />
+                        Cambios en Meta que quedan este mes: <field name="ediciones_quedan" class="d-inline fw-bold" readonly="1" /> de 10.
+                        <span invisible="not ediciones_proxima">El siguiente, desde <field name="ediciones_proxima" class="d-inline fw-bold" readonly="1" />.</span>
+                    </div>
                     <div class="alert alert-danger" role="alert" invisible="not perderia">
                         <p class="mb-2">Meta borraría de la plantilla: <field name="perderia" class="d-inline fw-bold" readonly="1" />. Si ha sido sin querer, vuelve a ponerlo antes de enviar. Si quieres quitarlo de verdad:</p>
                         <button name="accion_enviar_quitando" type="object" string="Sí, quitarlo y enviar" class="btn-danger btn-sm" confirm="Lo quitado no se recupera en Meta sin gastar otro cambio. ¿Seguro?" />
