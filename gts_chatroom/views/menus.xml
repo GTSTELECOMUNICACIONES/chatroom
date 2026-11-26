@@ -108,6 +108,13 @@
         sequence="10"
     />
     <menuitem
+        id="menu_chatroom_buzones"
+        name="Buzones"
+        parent="menu_chatroom_config"
+        action="action_chatroom_buzones"
+        sequence="5"
+    />
+    <menuitem
         id="menu_chatroom_ajustes"
         name="Ajustes"
         parent="menu_chatroom_config"

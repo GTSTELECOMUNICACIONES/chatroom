@@ -12,3 +12,5 @@ access_gts_chatroom_nueva_dato_user,gts.chatroom.nueva.dato usuario,model_gts_ch
 access_gts_chatroom_pasar_user,gts.chatroom.pasar usuario,model_gts_chatroom_pasar,mail_gateway.gateway_user,1,1,1,1
 access_gts_chatroom_plantilla_variable_user,gts.chatroom.plantilla.variable usuario,model_gts_chatroom_plantilla_variable,mail_gateway.gateway_user,1,1,1,1
 access_gts_chatroom_plantilla_boton_user,gts.chatroom.plantilla.boton usuario,model_gts_chatroom_plantilla_boton,mail_gateway.gateway_user,1,1,1,1
+access_gts_chatroom_buzon_user,gts.chatroom.buzon usuario,model_gts_chatroom_buzon,mail_gateway.gateway_user,1,0,0,0
+access_gts_chatroom_buzon_admin,gts.chatroom.buzon admin,model_gts_chatroom_buzon,base.group_system,1,1,1,1

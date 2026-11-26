@@ -7,7 +7,7 @@ no es miembro de la cuenta en el portal, el portal lo dice y la conversación
 se queda sin dueño, a la vista.
 """
 
-from odoo import fields, models
+from odoo import api, fields, models
 
 
 class GtsChatroomPasar(models.TransientModel):
@@ -17,20 +17,25 @@ class GtsChatroomPasar(models.TransientModel):
     canal_id = fields.Many2one(
         "discuss.channel", "Conversación", required=True, ondelete="cascade"
     )
+    # Solo a quien atiende el buzón de esa conversación: otro no la vería.
+    operador_ids = fields.Many2many(
+        "res.users", compute="_compute_operador_ids", string="Del buzón"
+    )
     usuario_id = fields.Many2one(
         "res.users",
         "Pasarla a",
         required=True,
-        domain=lambda self: [
-            ("share", "=", False),
-            ("id", "!=", self.env.uid),
-            (
-                "all_group_ids",
-                "in",
-                self.env.ref("mail_gateway.gateway_user").ids,
-            ),
-        ],
+        domain="[('id', 'in', operador_ids), ('id', '!=', uid)]",
     )
+
+    @api.depends("canal_id")
+    def _compute_operador_ids(self):
+        for pasar in self:
+            pasar.operador_ids = (
+                pasar.canal_id.sudo().gateway_id.gts_buzon_id.usuario_ids.filtered(
+                    lambda u: u.active and u.has_group("mail_gateway.gateway_user")
+                )
+            )
 
     def accion_pasar(self):
         self.ensure_one()

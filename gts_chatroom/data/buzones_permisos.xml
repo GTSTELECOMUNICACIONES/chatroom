@@ -1,0 +1,21 @@
+<?xml version="1.0" encoding="utf-8" ?>
+<odoo>
+    <!-- QUIÉN VE QUÉ: un operador solo ve las conversaciones de los canales
+         de sus buzones (David, 26-11-2026: «como un Lego»).
+
+         Regla GLOBAL (sin grupos), que se suma con Y a las de Odoo y la OCA:
+         las de grupo se suman con O y no pueden quitar nada. Los usuarios
+         externos (portal, público) quedan fuera: el cliente escribe como
+         invitado a través del usuario público.
+
+         ANTES de que exista esta regla, `_gts_preparar_central` mete en
+         Central a todos los que ya atendían algo: si no, al actualizar nadie
+         vería ninguna conversación. -->
+    <function model="gts.chatroom.buzon" name="_gts_preparar_central" />
+
+    <record id="regla_discuss_channel_buzon" model="ir.rule">
+        <field name="name">ChatRoom: solo las conversaciones de mis buzones</field>
+        <field name="model_id" ref="mail.model_discuss_channel" />
+        <field name="domain_force">[(1, '=', 1)] if user.share else ['|', ('channel_type', '!=', 'gateway'), ('gateway_id.gts_buzon_id.usuario_ids', 'in', user.ids)]</field>
+    </record>
+</odoo>

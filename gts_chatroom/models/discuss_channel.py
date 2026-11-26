@@ -264,6 +264,7 @@ class DiscussChannel(models.Model):
             "gts_cola": self.alma_cola or False,
             "gts_asignado_a": (self.alma_asignado_a or "").lower() or False,
             "gts_canal_id": self.gateway_id.id or False,
+            "gts_buzon_id": self.sudo().gateway_id.gts_buzon_id.id or False,
         }
 
     @api.model

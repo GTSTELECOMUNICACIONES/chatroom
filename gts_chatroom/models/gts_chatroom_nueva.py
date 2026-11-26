@@ -42,11 +42,15 @@ class GtsChatroomNueva(models.TransientModel):
         "mail.gateway",
         "Canal",
         required=True,
-        domain=[
+        # Solo los canales de MIS buzones.
+        domain=lambda self: [
             ("gateway_type", "=", "alma"),
             ("integrated_webhook_state", "=", "integrated"),
+            ("gts_buzon_id.usuario_ids", "in", self.env.uid),
         ],
-        default=lambda self: self.env["res.partner"]._gts_pasarelas_alma()[:1],
+        default=lambda self: self.env["res.partner"]
+        ._gts_pasarelas_alma()
+        .filtered(lambda g: self.env.user in g.gts_buzon_id.usuario_ids)[:1],
     )
     # Sin readonly: un campo de solo lectura no viaja al guardar el diálogo.
     res_model = fields.Char()

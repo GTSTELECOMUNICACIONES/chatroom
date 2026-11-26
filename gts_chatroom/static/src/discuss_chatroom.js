@@ -48,11 +48,11 @@ import { session } from "@web/session";
 // del módulo y no un campo del store: lo fija la acción antes de pintar.
 const vista = { soloChatroom: false };
 
-// El buzón elegido arriba (false = todos). Reactivo: al cambiarlo se
-// repinta el lateral.
-const CLAVE_BUZON = "gts_chatroom.buzon";
+// El buzón elegido en el lateral (false = todos los míos). Reactivo: al
+// cambiarlo se repinta. Clave nueva: la vieja guardaba un canal, no un buzón.
+const CLAVE_BUZON = "gts_chatroom.buzon_id";
 const CLAVE_SILENCIO = "gts_chatroom.silencio";
-const filtro = reactive({ canal: leerNumero(CLAVE_BUZON) });
+const filtro = reactive({ buzon: leerNumero(CLAVE_BUZON) });
 
 function leerNumero(clave) {
     try {
@@ -63,7 +63,7 @@ function leerNumero(clave) {
 }
 
 function delBuzon(thread) {
-    return !filtro.canal || thread.gts_canal_id === filtro.canal;
+    return !filtro.buzon || thread.gts_buzon_id === filtro.buzon;
 }
 
 // (id del apartado, nombre, icono). El orden es el de la pantalla.
@@ -71,11 +71,11 @@ const APARTADOS = [
     // La BANDEJA DE ENTRADA: donde entra todo lo que nadie ha cogido
     // (David, 26-11-2026). Siempre abierta, con contador y bolita.
     ["gts_esperando", _t("Bandeja de entrada (sin atender)"), "fa fa-inbox"],
-    ["gts_mias", _t("Para mí"), "fa fa-user"],
+    ["gts_mias", _t("Para mí"), "fa fa-user-circle-o"],
     ["gts_contestada", _t("Contestadas sin asignar"), "fa fa-reply"],
     ["gts_otros", _t("Atendidas por compañeros"), "fa fa-users"],
     ["gts_ia", _t("Atendidos por la IA"), "fa fa-magic"],
-    ["gts_resuelta", _t("Resueltas"), "fa fa-check"],
+    ["gts_resuelta", _t("Resueltas"), "fa fa-check-circle-o"],
 ];
 
 function esNuestro(id) {
@@ -176,6 +176,7 @@ patch(Thread.prototype, {
         this.gts_cola = fields.Attr(false);
         this.gts_asignado_a = fields.Attr(false);
         this.gts_canal_id = fields.Attr(false);
+        this.gts_buzon_id = fields.Attr(false);
     },
     _computeDiscussAppCategory() {
         if (this.channel_type === "gateway" && this.gts_cola) {
@@ -202,6 +203,10 @@ patch(DiscussSidebar.prototype, {
 });
 
 patch(DiscussSidebarCategory.prototype, {
+    /** El icono de cada apartado del ChatRoom, delante del nombre. */
+    get gtsIcono() {
+        return String(this.category.id).startsWith("gts_") ? this.category.icon : false;
+    },
     /** Las que esperan en la bandeja de entrada (del buzón elegido). */
     get gtsPendientes() {
         if (this.category.id !== "gts_esperando") {
@@ -234,7 +239,7 @@ patch(DiscussSidebarCategories.prototype, {
     },
     filteredThreads(threads) {
         const hilos = super.filteredThreads(threads);
-        if (!vista.soloChatroom || !this.gtsFiltro.canal) {
+        if (!vista.soloChatroom || !this.gtsFiltro.buzon) {
             return hilos;
         }
         return hilos.filter(
@@ -328,6 +333,7 @@ export class GtsBuzon extends Component {
         super.setup();
         this.store = useService("mail.store");
         this.orm = useService("orm");
+        this.action = useService("action");
         this.filtro = useState(filtro);
         this.estado = useState({
             buzones: [],
@@ -337,10 +343,10 @@ export class GtsBuzon extends Component {
             if (!vista.soloChatroom) {
                 return;
             }
-            this.estado.buzones = await this.orm.call("discuss.channel", "gts_buzones", []);
-            // Un buzón guardado que ya no existe no puede dejar el lateral vacío.
-            if (!this.estado.buzones.some((b) => b.id === this.filtro.canal)) {
-                this.filtro.canal = false;
+            this.estado.buzones = await this.orm.call("gts.chatroom.buzon", "gts_mis_buzones", []);
+            // Un buzón guardado que ya no es mío no puede dejar el lateral vacío.
+            if (!this.estado.buzones.some((b) => b.id === this.filtro.buzon)) {
+                this.filtro.buzon = false;
             }
         });
         onMounted(() => {
@@ -354,9 +360,19 @@ export class GtsBuzon extends Component {
         return vista.soloChatroom && this.estado.buzones.length > 0;
     }
 
-    get buzon() {
-        const buzones = this.estado.buzones;
-        return buzones.find((b) => b.id === this.filtro.canal) || (buzones.length === 1 && buzones[0]);
+    get esAdmin() {
+        return Boolean(session.is_admin);
+    }
+
+    get elegido() {
+        return this.estado.buzones.find((b) => b.id === this.filtro.buzon) || false;
+    }
+
+    /** Las que esperan, en vivo: del bus, no de la carga. */
+    esperandoDe(buzon) {
+        return (this.store.discuss.gts_esperando?.threads || []).filter(
+            (t) => t.gts_buzon_id === buzon.id
+        ).length;
     }
 
     get pendientes() {
@@ -369,10 +385,10 @@ export class GtsBuzon extends Component {
         }
     }
 
-    elegir(ev) {
-        this.filtro.canal = parseInt(ev.target.value) || false;
+    elegir(id) {
+        this.filtro.buzon = id || false;
         try {
-            browser.localStorage.setItem(CLAVE_BUZON, this.filtro.canal || "");
+            browser.localStorage.setItem(CLAVE_BUZON, this.filtro.buzon || "");
         } catch {
             // Sin almacenamiento: vale para esta pestaña.
         }
@@ -394,9 +410,23 @@ export class GtsBuzon extends Component {
         const thread = (this.store.discuss.gts_esperando?.threads || []).find(delBuzon);
         thread?.setAsDiscussThread();
     }
+
+    nuevoBuzon() {
+        this.action.doAction("gts_chatroom.action_chatroom_buzones");
+    }
+}
+
+/** La lista de buzones, debajo de los apartados, como en Superchat. */
+export class GtsBuzones extends GtsBuzon {
+    static template = "gts_chatroom.Buzones";
+
+    avisar() {
+        // El pitido lo da la cabecera; aquí, una sola vez no dos.
+    }
 }
 
 discussSidebarItemsRegistry.add("gts_buzon", GtsBuzon, { sequence: 15 });
+discussSidebarItemsRegistry.add("gts_buzones", GtsBuzones, { sequence: 35 });
 
 // ---------------------------------------------------------------------
 // Nueva conversación

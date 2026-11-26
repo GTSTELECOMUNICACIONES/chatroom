@@ -12,23 +12,19 @@
 
     <t t-name="gts_chatroom.Buzon">
         <div t-if="visible" class="o-gts-Buzon mx-2 mb-2 p-2 rounded border bg-view">
-            <div class="d-flex align-items-center gap-1">
-                <i class="fa fa-inbox opacity-75" role="presentation"/>
+            <div class="d-flex align-items-center gap-2">
+                <span class="o-gts-Buzon-icono" t-esc="elegido ? elegido.icono : '🗂️'"/>
                 <t t-if="!store.discuss.isSidebarCompact">
-                    <select t-if="estado.buzones.length > 1" class="form-select form-select-sm fw-bold" t-on-change="(ev) => this.elegir(ev)" title="Buzón">
-                        <option value="" t-att-selected="!filtro.canal">Todos los buzones</option>
-                        <t t-foreach="estado.buzones" t-as="b" t-key="b.id">
-                            <option t-att-value="b.id" t-att-selected="b.id === filtro.canal" t-esc="b.nombre"/>
-                        </t>
-                    </select>
-                    <span t-else="" class="fw-bold text-truncate" t-esc="buzon.nombre"/>
+                    <span class="fw-bold text-truncate" t-esc="elegido ? elegido.nombre : 'Todos mis buzones'"/>
                     <span class="flex-grow-1"/>
                     <button class="btn btn-link btn-sm p-0 text-reset opacity-75" t-on-click="() => this.silenciar()" t-att-title="estado.silencio ? 'Activar el pitido' : 'Silenciar el pitido'">
                         <i t-attf-class="fa fa-fw {{ estado.silencio ? 'fa-bell-slash' : 'fa-bell' }}" role="presentation"/>
                     </button>
                 </t>
             </div>
-            <div t-if="buzon and !store.discuss.isSidebarCompact" class="small text-muted text-truncate" t-esc="buzon.canal"/>
+            <div t-if="elegido and elegido.canales.length and !store.discuss.isSidebarCompact" class="small text-muted text-truncate">
+                <t t-foreach="elegido.canales" t-as="c" t-key="c.id"><t t-if="!c_first"> · </t><t t-esc="c.canal"/></t>
+            </div>
             <button t-if="pendientes" class="o-gts-Buzon-aviso btn btn-sm btn-link p-0 mt-1 d-flex align-items-center gap-1 text-danger fw-bold text-decoration-none" t-on-click="() => this.abrirPendiente()" title="Abrir la primera que espera">
                 <span class="o-gts-Buzon-bolita" role="presentation"/>
                 <t t-if="!store.discuss.isSidebarCompact">
@@ -38,8 +34,38 @@
         </div>
     </t>
 
+    <!-- LOS BUZONES, debajo de los apartados (David, 26-11-2026, como en
+         Superchat): «Todos» y cada buzón con su icono. Al pulsar uno, los
+         apartados de arriba enseñan solo lo suyo. -->
+    <t t-name="gts_chatroom.Buzones">
+        <div t-if="visible and !store.discuss.isSidebarCompact" class="o-gts-Buzones mx-2 mt-3 mb-2">
+            <div class="d-flex align-items-center px-2 mb-1 small text-uppercase fw-bold text-muted">
+                <span class="flex-grow-1">Buzones</span>
+            </div>
+            <button class="o-gts-Buzones-item btn btn-sm w-100 d-flex align-items-center gap-2 text-start" t-att-class="{ 'o-activo': !filtro.buzon }" t-on-click="() => this.elegir(false)">
+                <span class="o-gts-Buzon-icono">🗂️</span>
+                <span class="flex-grow-1 text-truncate">Todos mis buzones</span>
+                <span t-if="pendientes and !filtro.buzon" class="badge rounded-pill text-bg-danger" t-esc="pendientes"/>
+            </button>
+            <t t-foreach="estado.buzones" t-as="b" t-key="b.id">
+                <button class="o-gts-Buzones-item btn btn-sm w-100 d-flex align-items-center gap-2 text-start" t-att-class="{ 'o-activo': filtro.buzon === b.id }" t-on-click="() => this.elegir(b.id)" t-att-title="b.canales.map((c) => c.canal).join(' · ')">
+                    <span class="o-gts-Buzon-icono" t-esc="b.icono"/>
+                    <span class="flex-grow-1 text-truncate" t-esc="b.nombre"/>
+                    <span t-if="esperandoDe(b)" class="badge rounded-pill text-bg-danger" t-esc="esperandoDe(b)"/>
+                </button>
+            </t>
+            <button t-if="esAdmin" class="o-gts-Buzones-item btn btn-sm w-100 d-flex align-items-center gap-2 text-start text-muted" t-on-click="() => this.nuevoBuzon()">
+                <i class="fa fa-fw fa-plus" role="presentation"/>
+                <span>Gestionar buzones</span>
+            </button>
+        </div>
+    </t>
+
     <!-- Contador y bolita roja en la bandeja de entrada del lateral. -->
     <t t-inherit="mail.DiscussSidebarCategory.main" t-inherit-mode="extension">
+        <xpath expr="//t[@name='titleText']" position="before">
+            <i t-if="gtsIcono" t-att-class="gtsIcono" class="fa-fw me-1 opacity-75" role="presentation"/>
+        </xpath>
         <xpath expr="//t[@name='titleText']" position="after">
             <t t-if="gtsPendientes">
                 <span class="ms-1 fw-bold text-danger">(<t t-esc="gtsPendientes"/>)</span>

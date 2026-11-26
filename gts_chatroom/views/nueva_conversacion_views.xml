@@ -88,6 +88,7 @@
             <form string="Pasar a otra persona">
                 <group name="pasar">
                     <field name="canal_id" readonly="1" options="{'no_open': True}" />
+                    <field name="operador_ids" invisible="1" />
                     <field name="usuario_id" options="{'no_create': True, 'no_open': True}" />
                 </group>
                 <div class="text-muted small">

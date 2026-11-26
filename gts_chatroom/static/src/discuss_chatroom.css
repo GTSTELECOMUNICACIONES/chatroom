@@ -19,3 +19,26 @@
         box-shadow: 0 0 0 0.35rem rgba(220, 53, 69, 0);
     }
 }
+
+/* Los buzones del lateral: el icono (emoji) y el elegido resaltado. */
+.o-gts-Buzon-icono {
+    font-size: 1.15rem;
+    line-height: 1;
+    width: 1.5rem;
+    text-align: center;
+}
+
+.o-gts-Buzones-item {
+    border: 0;
+    border-radius: 0.5rem;
+    padding: 0.35rem 0.5rem;
+}
+
+.o-gts-Buzones-item:hover {
+    background-color: var(--gray-200, rgba(0, 0, 0, 0.05));
+}
+
+.o-gts-Buzones-item.o-activo {
+    background-color: var(--gray-300, rgba(0, 0, 0, 0.08));
+    font-weight: 600;
+}

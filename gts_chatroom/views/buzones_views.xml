@@ -1,0 +1,77 @@
+<?xml version="1.0" encoding="utf-8" ?>
+<odoo>
+    <!-- LOS BUZONES (David, 26-11-2026): como en Superchat. Cada uno con su
+         icono, sus canales y quién lo atiende. -->
+    <record id="gts_chatroom_buzon_list" model="ir.ui.view">
+        <field name="name">gts.chatroom.buzon.list</field>
+        <field name="model">gts.chatroom.buzon</field>
+        <field name="arch" type="xml">
+            <list>
+                <field name="sequence" widget="handle" />
+                <field name="icono" width="60px" />
+                <field name="name" />
+                <field name="canal_ids" widget="many2many_tags" />
+                <field name="usuario_ids" widget="many2many_avatar_user" />
+                <field name="es_central" optional="hide" />
+            </list>
+        </field>
+    </record>
+
+    <record id="gts_chatroom_buzon_form" model="ir.ui.view">
+        <field name="name">gts.chatroom.buzon.form</field>
+        <field name="model">gts.chatroom.buzon</field>
+        <field name="arch" type="xml">
+            <form>
+                <sheet>
+                    <field name="es_central" invisible="1" />
+                    <div class="alert alert-info" role="status" invisible="not es_central">
+                        Central es el buzón por defecto: aquí caen los canales nuevos y los de un buzón que se borra. No se puede borrar.
+                    </div>
+                    <div class="oe_title d-flex align-items-center gap-3">
+                        <field name="icono" class="fs-1 text-center" style="width: 4rem;" placeholder="📁" />
+                        <h1 class="flex-grow-1 mb-0"><field name="name" placeholder="p. ej. Reclamaciones" /></h1>
+                    </div>
+                    <div class="text-muted small mb-3">
+                        El icono es un solo emoji. Para escribirlo: tecla Windows + punto en Windows, Control + Comando + espacio en Mac.
+                    </div>
+                    <group name="buzon">
+                        <group name="canales" string="Canales">
+                            <field name="canal_ids" nolabel="1" colspan="2" widget="many2many_tags" options="{'no_create': True}" />
+                            <div colspan="2" class="text-muted small">Cada canal está en un solo buzón: al añadirlo aquí, sale del que estaba.</div>
+                        </group>
+                        <group name="operadores" string="Quién lo atiende">
+                            <field name="usuario_ids" nolabel="1" colspan="2" widget="many2many_avatar_user" options="{'no_create': True}" />
+                            <div colspan="2" class="text-muted small">Solo estas personas ven sus conversaciones, también al buscar. Quien sale, deja de verlas al momento.</div>
+                        </group>
+                    </group>
+                </sheet>
+            </form>
+        </field>
+    </record>
+
+    <record id="action_chatroom_buzones" model="ir.actions.act_window">
+        <field name="name">Buzones</field>
+        <field name="res_model">gts.chatroom.buzon</field>
+        <field name="view_mode">list,form</field>
+        <field name="help" type="html">
+            <p class="o_view_nocontent_smiling_face">Crea un buzón</p>
+            <p>Un buzón es como un equipo de atención: sus canales y quién los atiende. Por ejemplo, «Escuela» y «Motorsport».</p>
+        </field>
+    </record>
+
+    <!-- En la ficha del canal: su buzón. Los operadores ya los pone él. -->
+    <record id="mail_gateway_form_buzon" model="ir.ui.view">
+        <field name="name">mail.gateway.form.buzon</field>
+        <field name="model">mail.gateway</field>
+        <field name="inherit_id" ref="gts_chatroom.mail_gateway_form_view" />
+        <field name="arch" type="xml">
+            <field name="member_ids" position="before">
+                <field name="gts_buzon_id" options="{'no_create': True}" required="1" />
+            </field>
+            <field name="member_ids" position="attributes">
+                <attribute name="readonly">1</attribute>
+                <attribute name="help">Los pone el buzón: se cambian en ChatRoom › Configuración › Buzones.</attribute>
+            </field>
+        </field>
+    </record>
+</odoo>
