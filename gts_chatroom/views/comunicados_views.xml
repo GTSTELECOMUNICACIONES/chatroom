@@ -7,7 +7,9 @@
         <field name="arch" type="xml">
             <list decoration-muted="not se_puede_enviar">
                 <header>
-                    <button name="accion_actualizar" type="object" string="Copiar del portal" icon="fa-refresh" class="btn-primary" display="always" />
+                    <!-- Se sincroniza solo (cron). El botón queda para el modo
+                         técnico, por si hay que forzarlo. -->
+                    <button name="accion_actualizar" type="object" string="Sincronizar ahora" icon="fa-refresh" display="always" groups="base.group_no_one" />
                 </header>
                 <field name="name" />
                 <field name="categoria_texto" />
@@ -44,7 +46,7 @@
                         Meta la ha reclasificado: se cobra y se trata como <field name="categoria_texto" class="fw-bold" readonly="1" />.
                     </div>
                     <div class="alert alert-warning" role="status" invisible="not alma_id or se_puede_enviar or estado not in ('pendiente', 'PENDING', 'en_revision')">
-                        Pendiente de Meta: todavía no se puede enviar. Meta no avisa cuando la aprueba; pulsa «Copiar del portal» en la lista dentro de un rato para ver su estado.
+                        Pendiente de Meta: todavía no se puede enviar. El estado se actualiza solo cada pocos minutos; cuando Meta la apruebe, aparecerá para enviar.
                     </div>
                     <div class="alert alert-info" role="status" invisible="alma_id">
                         Borrador. Obligatorio: nombre, categoría, idioma y texto, y un ejemplo para cada {{dato}} del texto (pestaña «Datos»). Opcional: cabecera, pie y botones. Al guardar, pulsa «Enviar para aprobación»: Meta suele contestar en minutos y puede cambiar la categoría; la que quede es la que se cobra.
@@ -127,7 +129,7 @@
         <field name="view_mode">list,form</field>
         <field name="help" type="html">
             <p class="o_view_nocontent_smiling_face">Aún no hay plantillas.</p>
-            <p>Pulsa «Copiar del portal» para traer las de la cuenta, o «Nuevo» para escribir una y mandarla a aprobar.</p>
+            <p>Pulsa «Nuevo» para escribir una y mandarla a aprobar. Las de la cuenta y su estado en Meta se actualizan solas.</p>
         </field>
     </record>
 

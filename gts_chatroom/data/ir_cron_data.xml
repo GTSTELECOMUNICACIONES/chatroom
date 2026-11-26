@@ -23,4 +23,16 @@
         <field name="interval_number">5</field>
         <field name="interval_type">minutes</field>
     </record>
+
+    <!-- Las plantillas y su estado en Meta, sin que nadie pulse nada
+         (David, 26-11-2026). GET /plantillas no llama al proveedor: es la
+         copia del portal. -->
+    <record id="ir_cron_sincronizar_plantillas" model="ir.cron">
+        <field name="name">ChatRoom: sincronizar las plantillas con el portal</field>
+        <field name="model_id" ref="model_gts_chatroom_plantilla" />
+        <field name="state">code</field>
+        <field name="code">model._gts_sincronizar_plantillas()</field>
+        <field name="interval_number">10</field>
+        <field name="interval_type">minutes</field>
+    </record>
 </odoo>

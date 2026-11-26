@@ -153,6 +153,35 @@ class MailGateway(models.Model):
             },
         }
 
+    @api.model
+    def _gts_abrir_portal(self):
+        """El menú «Créditos»: la cuenta del cliente en el portal, donde está
+        el monedero (David, 26-11-2026: a los meses nadie se acuerda del
+        enlace). La ruta dentro del portal va en un parámetro para no tocar
+        código si cambia."""
+        canal = self.sudo().search(
+            [
+                ("gateway_type", "=", "alma"),
+                ("integrated_webhook_state", "=", "integrated"),
+                ("alma_url", "!=", False),
+            ],
+            limit=1,
+        )
+        if not canal:
+            raise UserError(
+                self.env._("No hay ningún canal del portal de Alma configurado.")
+            )
+        ruta = (
+            self.env["ir.config_parameter"]
+            .sudo()
+            .get_param("gts_chatroom.ruta_creditos", "")
+        )
+        return {
+            "type": "ir.actions.act_url",
+            "url": canal.alma_url.rstrip("/") + "/" + ruta.lstrip("/"),
+            "target": "new",
+        }
+
     # ------------------------------------------------------------------
     # Las bandejas
     # ------------------------------------------------------------------

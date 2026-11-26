@@ -18,6 +18,7 @@ acaba con un dato, cada dato tiene ejemplo y los largos máximos.
 
 import re
 import unicodedata
+from datetime import timedelta
 
 from odoo import api, fields, models
 from odoo.exceptions import UserError
@@ -379,9 +380,9 @@ class GtsChatroomPlantillaAlta(models.Model):
             raise UserError(
                 self.env._(
                     "No llegó la respuesta del portal (%s). Puede que la "
-                    "plantilla SÍ se presentara: antes de volver a enviarla, "
-                    "pulsa «Copiar del portal» en la lista. Si ya está, este "
-                    "borrador se enlaza con ella solo.",
+                    "plantilla SÍ se presentara: espera unos minutos antes de "
+                    "volver a enviarla. Si se presentó, este borrador se enlaza "
+                    "con ella solo al actualizarse las plantillas.",
                     error,
                 )
             ) from error
@@ -404,6 +405,12 @@ class GtsChatroomPlantillaAlta(models.Model):
                 "motivo": False,
             }
         )
+        # A los dos minutos se mira si Meta ya contestó; luego, cada diez.
+        cron = self.env.ref(
+            "gts_chatroom.ir_cron_sincronizar_plantillas", raise_if_not_found=False
+        )
+        if cron:
+            cron.sudo()._trigger(at=fields.Datetime.now() + timedelta(minutes=2))
         return {
             "type": "ir.actions.client",
             "tag": "display_notification",
@@ -411,8 +418,9 @@ class GtsChatroomPlantillaAlta(models.Model):
                 "title": self.env._("Enviada a Meta"),
                 "type": "success",
                 "message": self.env._(
-                    "Meta suele contestar en minutos, a veces en un día. Pulsa "
-                    "«Copiar del portal» en la lista para ver si ya está aprobada."
+                    "Meta suele contestar en minutos, a veces en un día. El "
+                    "estado se actualiza solo: cuando la apruebe, aparecerá para "
+                    "enviar."
                 ),
                 "next": {"type": "ir.actions.client", "tag": "soft_reload"},
             },

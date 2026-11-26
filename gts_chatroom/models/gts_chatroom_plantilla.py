@@ -12,6 +12,8 @@ Tres reglas de Carlos que aqui se respetan:
   se ve, pero no se puede elegir en un comunicado.
 """
 
+import logging
+
 from odoo import api, fields, models
 from odoo.exceptions import UserError
 
@@ -23,6 +25,8 @@ def _mismo_texto(uno, otro):
     normaliza."""
     return " ".join((uno or "").split()) == " ".join((otro or "").split())
 
+
+_logger = logging.getLogger(__name__)
 
 CATEGORIAS = {
     "MARKETING": "Marketing",
@@ -133,6 +137,34 @@ class GtsChatroomPlantilla(models.Model):
                 "next": {"type": "ir.actions.client", "tag": "soft_reload"},
             },
         }
+
+    @api.model
+    def _gts_sincronizar_plantillas(self):
+        """EL CHATROOM SE MANEJA ENTERO DESDE ODOO (David, 26-11-2026): nadie
+        tiene que pulsar «copiar del portal» para ver si Meta aprobó una
+        plantilla. Lo hace el cron cada 10 minutos y, tras mandar una a
+        aprobar, a los 2. Una pasarela que falla no para a las demás."""
+        pasarelas = (
+            self.env["mail.gateway"]
+            .sudo()
+            .search(
+                [
+                    ("gateway_type", "=", "alma"),
+                    ("integrated_webhook_state", "=", "integrated"),
+                ]
+            )
+        )
+        for gateway in pasarelas:
+            try:
+                with self.env.cr.savepoint():
+                    self.sudo()._copiar_del_portal(gateway)
+            except Exception:  # noqa: BLE001 - se apunta y se sigue
+                _logger.warning(
+                    "ChatRoom: no se pudieron sincronizar las plantillas de %s",
+                    gateway.id,
+                    exc_info=True,
+                )
+        return True
 
     @api.model
     def _copiar_del_portal(self, gateway):
