@@ -510,6 +510,39 @@ class GtsChatroomPlantillaVariable(models.Model):
     )
     posicion = fields.Integer("Dato", required=True)
     modelo = fields.Char(related="plantilla_id.model_id.model")
+
+    @api.model_create_multi
+    def create(self, vals_list):
+        """RED: si una línea llega sin número (el cliente no manda un campo
+        readonly sin `force_save`, y una pestaña vieja en caché no lo lleva),
+        se numera por orden detrás de las que ya hay. Que guardar la
+        plantilla no dependa de lo que pinte la pantalla (26-11-2026)."""
+        siguiente = {}
+        for vals in vals_list:
+            if vals.get("posicion") or not vals.get("plantilla_id"):
+                continue
+            plantilla_id = vals["plantilla_id"]
+            if plantilla_id not in siguiente:
+                siguiente[plantilla_id] = (
+                    max(
+                        self.search([("plantilla_id", "=", plantilla_id)]).mapped(
+                            "posicion"
+                        ),
+                        default=0,
+                    )
+                    + 1
+                )
+            usados = {
+                v.get("posicion")
+                for v in vals_list
+                if v.get("plantilla_id") == plantilla_id
+            }
+            while siguiente[plantilla_id] in usados:
+                siguiente[plantilla_id] += 1
+            vals["posicion"] = siguiente[plantilla_id]
+            siguiente[plantilla_id] += 1
+        return super().create(vals_list)
+
     ejemplo = fields.Char(
         "Ejemplo para Meta", help="Un valor real de ejemplo. Meta lo exige."
     )
