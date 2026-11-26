@@ -43,6 +43,9 @@
                     <div class="alert alert-info" role="status" invisible="not reclasificada">
                         Meta la ha reclasificado: se cobra y se trata como <field name="categoria_texto" class="fw-bold" readonly="1" />.
                     </div>
+                    <div class="alert alert-warning" role="status" invisible="not alma_id or se_puede_enviar or estado not in ('pendiente', 'PENDING', 'en_revision')">
+                        Pendiente de Meta: todavía no se puede enviar. Meta no avisa cuando la aprueba; pulsa «Copiar del portal» en la lista dentro de un rato para ver su estado.
+                    </div>
                     <div class="alert alert-info" role="status" invisible="alma_id">
                         Borrador. Obligatorio: nombre, categoría, idioma y texto, y un ejemplo para cada {{dato}} del texto (pestaña «Datos»). Opcional: cabecera, pie y botones. Al guardar, pulsa «Enviar para aprobación»: Meta suele contestar en minutos y puede cambiar la categoría; la que quede es la que se cobra.
                     </div>
