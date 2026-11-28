@@ -16,13 +16,17 @@ queda.
 La direccion del portal y las claves van en la ficha de la pasarela, nunca en
 el codigo: el repositorio es publico.
 """,
-    "version": "19.0.0.19.1",
+    "version": "18.0.0.19.1",
     "category": "Discuss",
     "author": "GTS Telecomunicaciones",
     "website": "https://github.com/GTSTELECOMUNICACIONES/chatroom",
     # Heredada de mail_gateway, que es AGPL-3.
     "license": "AGPL-3",
-    "depends": ["mail_gateway", "phone_validation"],
+    # En la 18, `mail_gateway` está en OCA/social (en la 19, en OCA/mail).
+    # `sms` porque en la 18 es quien da a res.partner `phone_sanitized`
+    # (`sms/models/res_partner.py` hereda `mail.thread.phone`); en la 19 lo da
+    # `phone_validation`. Es auto_install de `mail`, así que ya suele estar.
+    "depends": ["mail_gateway", "phone_validation", "sms"],
     "data": [
         "security/ir.model.access.csv",
         "data/res_partner_data.xml",
@@ -43,6 +47,8 @@ el codigo: el repositorio es publico.
     ],
     "assets": {
         "web.assets_backend": [
+            "gts_chatroom/static/src/field_selector.js",
+            "gts_chatroom/static/src/field_selector.xml",
             "gts_chatroom/static/src/discuss_chatroom.js",
             "gts_chatroom/static/src/discuss_chatroom.xml",
             "gts_chatroom/static/src/discuss_chatroom.css",

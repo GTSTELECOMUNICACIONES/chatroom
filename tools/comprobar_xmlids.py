@@ -22,7 +22,8 @@ import re
 import sys
 import xml.etree.ElementTree as ET
 
-REF = pathlib.Path(os.path.expanduser("~/ref/odoo"))
+# Rama 18.0: el fuente de la 18 (en la rama 19.0, ~/ref/odoo).
+REF = pathlib.Path(os.path.expanduser("~/ref/odoo-18.0"))
 REPO = pathlib.Path(__file__).resolve().parent.parent
 
 

@@ -12,7 +12,7 @@ se le podía escribir desde su ficha.
   plantilla aprobada.
 """
 
-from odoo import models
+from odoo import api, models
 from odoo.exceptions import UserError
 
 from .mail_gateway_alma import _digitos
@@ -20,6 +20,42 @@ from .mail_gateway_alma import _digitos
 
 class ResPartner(models.Model):
     _inherit = "res.partner"
+
+    @api.model
+    def _gts_buscar_por_telefono(self, digitos):
+        """EL CONTACTO DE UN NÚMERO, MIRANDO LOS DOS TELÉFONOS (rama 18).
+
+        En la 18 un contacto tiene `phone` y `mobile` (en la 19, solo
+        `phone`). `phone_sanitized` guarda UNO: el primero de
+        `_phone_get_number_fields`, que es el móvil si lo hay
+        (`phone_validation/models/models.py` y `mail_thread_phone.py`,
+        `_compute_phone_sanitized`). Buscar solo por él no encuentra a quien
+        escribe desde el número que tiene en el otro campo, y se crearía un
+        invitado o un contacto duplicado (aviso de David, 28-11-2026).
+
+        1. `phone_sanitized` (indexado, el caso normal).
+        2. Si no, los dos campos en crudo por las últimas cifras
+           (`phone_mobile_search`, de `mail.thread.phone`) y se comprueba
+           cada candidato normalizando su número con el formato de Odoo."""
+        digitos = _digitos(digitos)
+        Partner = self.env["res.partner"]
+        if not digitos:
+            return Partner
+        encontrado = self.search([("phone_sanitized", "=", f"+{digitos}")], limit=1)
+        # Con menos cifras no es un número y `phone_mobile_search` exige 3.
+        if encontrado or len(digitos) < 7:
+            return encontrado
+        candidatos = self.search(
+            [("phone_mobile_search", "ilike", digitos[-9:])], limit=50
+        )
+        for partner in candidatos:
+            for campo in ("mobile", "phone"):
+                if not partner[campo]:
+                    continue
+                normalizado = partner._phone_format(fname=campo) or partner[campo]
+                if _digitos(normalizado) == digitos:
+                    return partner
+        return Partner
 
     def _gts_pasarelas_alma(self):
         return (

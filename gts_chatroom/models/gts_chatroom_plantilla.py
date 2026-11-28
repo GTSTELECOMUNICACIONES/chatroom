@@ -96,9 +96,14 @@ class GtsChatroomPlantilla(models.Model):
     ediciones_proxima = fields.Datetime("Próximo cambio desde", readonly=True)
     active = fields.Boolean(default=True)
 
-    _alma_id_unico = models.Constraint(
-        "UNIQUE(gateway_id, alma_id)", "Esa plantilla ya está copiada."
-    )
+    # Rama 18: `_sql_constraints` (en la 19, `models.Constraint`).
+    _sql_constraints = [
+        (
+            "alma_id_unico",
+            "UNIQUE(gateway_id, alma_id)",
+            "Esa plantilla ya está copiada.",
+        ),
+    ]
 
     @api.depends("categoria")
     def _compute_categoria_texto(self):

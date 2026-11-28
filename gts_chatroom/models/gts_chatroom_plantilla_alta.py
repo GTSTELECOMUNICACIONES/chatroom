@@ -149,11 +149,15 @@ class GtsChatroomPlantillaAlta(models.Model):
         "rellenar los datos.",
     )
     modelo = fields.Char(related="model_id.model")
+    # Rama 18: el contacto tiene móvil (`mobile`) y teléfono (`phone`), y
+    # WhatsApp va al móvil. Si la ficha no lo tiene, se prueba el otro y
+    # después el contacto (`gts.chatroom.nueva._compute_telefono`).
     campo_telefono = fields.Char(
         "Campo del teléfono",
-        default="phone",
-        help="De dónde sale el número en esa ficha, por ejemplo «phone» o "
-        "«partner_id.phone».",
+        default="mobile",
+        help="De dónde sale el número en esa ficha, por ejemplo «mobile» "
+        "(móvil), «phone» o «partner_id.mobile». Si está vacío se prueba el "
+        "otro teléfono de la ficha y luego el del contacto.",
     )
     datos_mal_escritos = fields.Char(compute="_compute_datos_mal_escritos")
     asi_lo_ve_meta = fields.Text("Así lo ve Meta", compute="_compute_asi_lo_ve_meta")
@@ -757,7 +761,8 @@ class GtsChatroomPlantillaAlta(models.Model):
                     "binding_model_id": modelo.id,
                     "binding_view_types": "form",
                     "context": "{'gts_desde_registro': True}",
-                    "group_ids": [
+                    # Rama 18: `groups_id` (en la 19, `group_ids`).
+                    "groups_id": [
                         (6, 0, self.env.ref("mail_gateway.gateway_user").ids)
                     ],
                 }

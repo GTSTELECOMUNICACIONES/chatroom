@@ -17,7 +17,7 @@ import logging
 import re
 import time
 import uuid
-from datetime import UTC, datetime, timedelta
+from datetime import datetime, timedelta, timezone
 
 import requests
 from markupsafe import Markup
@@ -36,6 +36,11 @@ from odoo.addons.base.models.ir_mail_server import MailDeliveryException
 from .mail_message import ORIGENES
 
 _logger = logging.getLogger(__name__)
+
+# `datetime.UTC` es de Python 3.11 y la 18 admite 3.10 (`setup.py`,
+# python_requires>=3.10): importarlo en un servidor con 3.10 tumbaria el
+# registro entero, no solo este modulo.
+UTC = timezone.utc  # noqa: UP017
 
 # Margen para la hora de la firma. El mismo que se acordo para la pantalla.
 MARGEN_FIRMA = 300
@@ -405,7 +410,9 @@ class MailGatewayAlma(models.AbstractModel):
         if enlace:
             return enlace.partner_id
         Partner = self.env["res.partner"].sudo()
-        partner = Partner.search([("phone_sanitized", "=", f"+{telefono}")], limit=1)
+        # En la 18 un contacto tiene DOS teléfonos (`phone` y `mobile`) y
+        # `phone_sanitized` solo guarda uno: se miran los dos.
+        partner = Partner._gts_buscar_por_telefono(telefono)
         if not partner and not gateway.alma_crear_contactos:
             # NO SE CREAN CONTACTOS SOLOS (David, 26-11-2026): por el canal
             # entra de todo —curiosos, spam, gente que no vuelve— y llenaba
@@ -416,7 +423,9 @@ class MailGatewayAlma(models.AbstractModel):
             partner = Partner.create(
                 {
                     "name": update.get("nombre") or f"+{telefono}",
-                    "phone": f"+{telefono}",
+                    # Quien escribe por WhatsApp escribe desde un móvil: en
+                    # la 18 va en `mobile` (en la 19 solo hay `phone`).
+                    "mobile": f"+{telefono}",
                 }
             )
         Enlace.create(

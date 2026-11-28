@@ -55,14 +55,20 @@ PY
   # --fuente son FICHEROS .py, no carpetas: el fuente de los modelos cuyos
   # <record> creamos nosotros (res.groups, ir.rule...) y los nuestros.
   paso "records contra su modelo" $VENV/python "$RAIZ/tools/comprobar_records.py" \
-       --fuente $HOME/ref/odoo/odoo/addons/base/models/*.py \
-                $HOME/ref/odoo/addons/mail/models/*.py \
+       --fuente $HOME/ref/odoo-18.0/odoo/addons/base/models/*.py \
+                $HOME/ref/odoo-18.0/addons/mail/models/*.py \
                 "$MOD"/models/*.py \
        -- $(find "$MOD" -name "*.xml")
   paso "api.depends" $VENV/python "$RAIZ/tools/comprobar_api_depends.py" "$MOD"
+  # RAMA 18.0 (28-11-2026): el JS y las herencias OWL contra el fuente de la
+  # 18 (un xpath o un import que no existe deja el backend en blanco y
+  # ningun linter lo ve).
+  paso "JS y OWL contra la 18" $VENV/python "$RAIZ/tools/comprobar_js_contra_fuente.py" "$MOD"
   paso "depends del manifest" $VENV/python "$RAIZ/tools/check_depends.py" "$MOD"
 done
 
+# La API de la 19 que en la 18 no existe (y al reves en la rama 19.0).
+paso "API de la otra rama" $VENV/python "$RAIZ/tools/comprobar_api_de_rama.py"
 paso "sin secretos (repo publico)" $VENV/python "$RAIZ/tools/sin_secretos.py"
 echo
 if [ "$fallos" -gt 0 ]; then echo "$fallos comprobaciones FALLAN. No subas esto."; exit 1; fi

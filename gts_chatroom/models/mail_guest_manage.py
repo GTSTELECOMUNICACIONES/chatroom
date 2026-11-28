@@ -12,5 +12,6 @@ class MailGuestManage(models.TransientModel):
         vals = super()._get_partner_vals()
         token = self.guest_id.gateway_token
         if token and self.guest_id.gateway_id.gateway_type == "alma":
-            vals["phone"] = f"+{token}"
+            # Rama 18: el número de WhatsApp es un móvil y va en `mobile`.
+            vals["mobile"] = f"+{token}"
         return vals

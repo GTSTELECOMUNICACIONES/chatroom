@@ -61,12 +61,18 @@
         </div>
     </t>
 
-    <!-- Contador y bolita roja en la bandeja de entrada del lateral. -->
+    <!-- Contador y bolita roja en la bandeja de entrada del lateral.
+         RAMA 18: la plantilla no tiene `t[@name='titleText']` (eso es de la
+         19). El nombre del apartado es el único `t-esc="category.name"` de
+         mail.DiscussSidebarCategory.main en ~/ref/odoo-18.0
+         (mail/static/src/discuss/core/public_web/discuss_sidebar_categories.xml):
+         el icono y el contador van pegados a él. Un xpath que no casa deja el
+         backend en blanco. -->
     <t t-inherit="mail.DiscussSidebarCategory.main" t-inherit-mode="extension">
-        <xpath expr="//t[@name='titleText']" position="before">
+        <xpath expr="//t[@t-esc='category.name']" position="before">
             <i t-if="gtsIcono" t-att-class="gtsIcono" class="fa-fw me-1 opacity-75" role="presentation"/>
         </xpath>
-        <xpath expr="//t[@name='titleText']" position="after">
+        <xpath expr="//t[@t-esc='category.name']" position="after">
             <t t-if="gtsPendientes">
                 <span class="ms-1 fw-bold text-danger">(<t t-esc="gtsPendientes"/>)</span>
                 <span class="o-gts-Buzon-bolita ms-2" role="presentation" title="Hay conversaciones sin atender"/>

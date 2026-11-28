@@ -1,7 +1,7 @@
 import { Component, onMounted, onWillStart, onWillUnmount, reactive, useState } from "@odoo/owl";
 import { threadActionsRegistry } from "@mail/core/common/thread_actions";
 import { Thread } from "@mail/core/common/thread_model";
-import { fields } from "@mail/core/common/record";
+import { Record } from "@mail/core/common/record";
 import { DiscussClientAction } from "@mail/core/public_web/discuss_client_action";
 import { DiscussApp } from "@mail/core/public_web/discuss_app_model";
 import {
@@ -12,7 +12,7 @@ import {
     DiscussSidebarCategories,
     DiscussSidebarCategory,
 } from "@mail/discuss/core/public_web/discuss_sidebar_categories";
-import { DiscussAppCategory } from "@mail/discuss/core/public_web/discuss_app_category_model";
+import { DiscussAppCategory } from "@mail/core/public_web/discuss_app_category_model";
 import { compareDatetime } from "@mail/utils/common/misc";
 import { browser } from "@web/core/browser/browser";
 import { _t } from "@web/core/l10n/translation";
@@ -42,6 +42,18 @@ import { session } from "@web/session";
  * 6. «Pasar a otra persona» en la cabecera del chat.
  *
  * Lo que no es del portal (otras pasarelas) sigue en el apartado «ChatRoom».
+ *
+ * RAMA 18 (portado el 28-11-2026 desde la 19.0.0.19.1). Lo que cambia, todo
+ * comprobado contra ~/ref/odoo-18.0/addons/mail/static/src:
+ * - los campos de los modelos del store son `Record.one`/`Record.attr` (en la
+ *   19 se escriben con el helper de campos de la 19);
+ * - `DiscussAppCategory` vive en `core/public_web` y no en `discuss/core`;
+ * - las acciones de la cabecera reciben el COMPONENTE (`condition(component)`,
+ *   `open(component)`), no `{ owner, thread }`: ver `accionDelPortal`;
+ * - el store no es reactivo por sí solo: los componentes lo envuelven en
+ *   `useState`, como hace el propio Discuss de la 18;
+ * - la plantilla del apartado del lateral no tiene `t[@name='titleText']`:
+ *   el icono y el contador se cuelgan del nombre (`category.name`).
  */
 
 // La vista que se está pintando: la del ChatRoom o la de siempre. Variable
@@ -113,7 +125,7 @@ patch(DiscussApp.prototype, {
         super.setup(env);
         // Mismo apartado que el de mail_gateway (id «gateway»), otro nombre.
         // Queda para lo que no es del portal y se esconde si está vacío.
-        this.gateway = fields.One("DiscussAppCategory", {
+        this.gateway = Record.one("DiscussAppCategory", {
             compute() {
                 return {
                     extraClass: "o-mail-DiscussSidebarCategory-gateway",
@@ -129,7 +141,7 @@ patch(DiscussApp.prototype, {
             eager: true,
         });
         APARTADOS.forEach(([id, name, icon], n) => {
-            this[id] = fields.One("DiscussAppCategory", {
+            this[id] = Record.one("DiscussAppCategory", {
                 compute() {
                     return {
                         extraClass: `o-mail-DiscussSidebarCategory-${id}`,
@@ -178,11 +190,11 @@ patch(DiscussAppCategory.prototype, {
 patch(Thread.prototype, {
     setup() {
         super.setup();
-        this.gts_cola = fields.Attr(false);
-        this.gts_asignado_a = fields.Attr(false);
-        this.gts_canal_id = fields.Attr(false);
-        this.gts_buzon_id = fields.Attr(false);
-        this.gts_spam = fields.Attr(false);
+        this.gts_cola = Record.attr(false);
+        this.gts_asignado_a = Record.attr(false);
+        this.gts_canal_id = Record.attr(false);
+        this.gts_buzon_id = Record.attr(false);
+        this.gts_spam = Record.attr(false);
     },
     _computeDiscussAppCategory() {
         if (this.channel_type === "gateway" && this.gts_cola) {
@@ -270,12 +282,18 @@ patch(DiscussClientAction.prototype, {
         // OdooBot. Se abre la que pide el enlace (una tarjeta, un aviso) o la
         // última del ChatRoom; si no hay, la ventana queda en blanco hasta
         // que entre una.
-        const explicito =
-            props.action.context.active_id ?? props.action.params?.active_id;
+        let explicito = props.action.context.active_id ?? props.action.params?.active_id;
+        // Un enlace `?active_id=5` (la tarjeta, el aviso de espera) llega como
+        // NÚMERO, y `parseActiveId` de Odoo hace `.split("_")`: se le da la
+        // forma que espera, «discuss.channel_5».
+        if (typeof explicito === "number" || /^\d+$/.test(String(explicito ?? ""))) {
+            explicito = `discuss.channel_${explicito}`;
+        }
+        // (La 19 guarda además la última conversación abierta,
+        // `discuss.lastActiveId`; la 18 no la tiene.)
         const candidato =
             explicito ||
-            this.store.Thread.localIdToActiveId(this.store.discuss.thread?.localId) ||
-            this.store.discuss.lastActiveId;
+            this.store.Thread.localIdToActiveId(this.store.discuss.thread?.localId);
         if (candidato && (explicito || this._gtsEsDelChatroom(candidato))) {
             return super.restoreDiscussThread({
                 ...props,
@@ -337,7 +355,7 @@ export class GtsBuzon extends Component {
 
     setup() {
         super.setup();
-        this.store = useService("mail.store");
+        this.store = useState(useService("mail.store"));
         this.orm = useService("orm");
         this.action = useService("action");
         this.filtro = useState(filtro);
@@ -444,7 +462,7 @@ export class GtsNuevaConversacion extends Component {
 
     setup() {
         super.setup();
-        this.store = useService("mail.store");
+        this.store = useState(useService("mail.store"));
         this.action = useService("action");
     }
 
@@ -504,24 +522,40 @@ async function marcarSpam(owner, thread, spam) {
     });
 }
 
+/**
+ * Rama 18: el registro de acciones llama a `condition(component)` y
+ * `open(component)` con el componente que pinta la cabecera (Discuss o la
+ * ventana de chat), que tiene `thread` y `props.chatWindow`
+ * (mail/static/src/core/common/thread_actions.js). La 19 pasa
+ * `{ owner, thread }`. Así las acciones se escriben igual en las dos ramas.
+ */
+function accionDelPortal(accion) {
+    const contexto = (component) => ({ owner: component, thread: component.thread });
+    return {
+        ...accion,
+        condition: (component) => accion.condition(contexto(component)),
+        open: (component) => accion.open(contexto(component)),
+    };
+}
+
 threadActionsRegistry
-    .add("gts-spam", {
+    .add("gts-spam", accionDelPortal({
         condition: ({ owner, thread }) => esDelPortal(owner, thread) && !thread.gts_spam,
         icon: "fa fa-fw fa-ban",
         iconLarge: "fa fa-fw fa-lg fa-ban",
         name: _t("Marcar como spam: la IA deja de contestarle"),
         open: ({ owner, thread }) => marcarSpam(owner, thread, true),
         sequence: 30,
-    })
-    .add("gts-no-spam", {
+    }))
+    .add("gts-no-spam", accionDelPortal({
         condition: ({ owner, thread }) => esDelPortal(owner, thread) && thread.gts_spam,
         icon: "fa fa-fw fa-undo",
         iconLarge: "fa fa-fw fa-lg fa-undo",
         name: _t("No es spam"),
         open: ({ owner, thread }) => marcarSpam(owner, thread, false),
         sequence: 30,
-    })
-    .add("gts-descartar", {
+    }))
+    .add("gts-descartar", accionDelPortal({
         // Una conversación abierta desde «Nueva conversación» a la que no se
         // llegó a escribir: el portal aún no la conoce (sin cola).
         condition: ({ owner, thread }) =>
@@ -541,8 +575,8 @@ threadActionsRegistry
             thread.delete();
         },
         sequence: 9,
-    })
-    .add("gts-pasar", {
+    }))
+    .add("gts-pasar", accionDelPortal({
         condition: ({ owner, thread }) =>
             esDelPortal(owner, thread) && thread.gts_cola !== "resuelta",
         // Persona con flecha: «transferir a un compañero», como en las
@@ -559,8 +593,8 @@ threadActionsRegistry
             await owner.env.services.action.doAction(accion);
         },
         sequence: 8,
-    })
-    .add("gts-atender", {
+    }))
+    .add("gts-atender", accionDelPortal({
         condition: ({ owner, thread }) =>
             esDelPortal(owner, thread) && !(thread.gts_cola === "asignada" && esMia(thread)),
         icon: "fa fa-fw fa-hand-paper-o",
@@ -568,16 +602,16 @@ threadActionsRegistry
         name: _t("Atender: me la quedo"),
         open: ({ owner, thread }) => cambiarRelevo(owner, thread, "action_alma_atender"),
         sequence: 5,
-    })
-    .add("gts-devolver-ia", {
+    }))
+    .add("gts-devolver-ia", accionDelPortal({
         condition: ({ owner, thread }) => esDelPortal(owner, thread) && thread.gts_cola !== "ia",
         icon: "fa fa-fw fa-magic",
         iconLarge: "fa fa-fw fa-lg fa-magic",
         name: _t("Devolver a la IA"),
         open: ({ owner, thread }) => cambiarRelevo(owner, thread, "action_alma_devolver_ia"),
         sequence: 6,
-    })
-    .add("gts-resolver", {
+    }))
+    .add("gts-resolver", accionDelPortal({
         condition: ({ owner, thread }) =>
             esDelPortal(owner, thread) && thread.gts_cola !== "resuelta",
         icon: "fa fa-fw fa-check",
@@ -585,4 +619,4 @@ threadActionsRegistry
         name: _t("Dar por resuelta"),
         open: ({ owner, thread }) => cambiarRelevo(owner, thread, "action_alma_resolver"),
         sequence: 7,
-    });
+    }));

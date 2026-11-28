@@ -155,8 +155,10 @@ class GtsChatroomBuzon(models.Model):
             usuarios = (
                 Gateway.search([]).member_ids
                 | conversaciones.channel_member_ids.partner_id.user_ids
-                | (grupo.user_ids if grupo else self.env["res.users"])
+                | (grupo.users if grupo else self.env["res.users"])
             ).filtered(lambda u: not u.share and u.active)
+            # (En la 18 los usuarios de un grupo son `users`; en la 19,
+            # `user_ids`.)
             central.usuario_ids = [(4, u.id) for u in usuarios]
             Parametros.set_param("gts_chatroom.central_preparado", "1")
         # Sin `_gts_aplicar_buzon`: la primera vez cada canal se queda con los

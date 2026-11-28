@@ -25,7 +25,8 @@ import pathlib
 import re
 import sys
 
-REF = pathlib.Path(os.path.expanduser("~/ref/odoo"))
+# Rama 18.0: el fuente de la 18 (en la rama 19.0, ~/ref/odoo).
+REF = pathlib.Path(os.path.expanduser("~/ref/odoo-18.0"))
 
 
 def campos_declarados(ruta):

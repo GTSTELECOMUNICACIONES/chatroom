@@ -158,10 +158,19 @@ class DiscussChannel(models.Model):
             )
 
     def _search_alma_es_mia(self, operator, value):
-        if operator not in ("in", "not in"):
-            return NotImplemented
+        # Rama 18: el ORM pasa el operador TAL CUAL se escribió en el dominio
+        # (`("alma_es_mia", "=", True)`); la 19 lo normaliza antes a
+        # `in`/`not in` con una lista. Se admiten las dos formas.
+        if operator in ("=", "!="):
+            si = bool(value) == (operator == "=")
+        elif operator in ("in", "not in"):
+            si = (True in value) == (operator == "in")
+        else:
+            raise UserError(
+                self.env._("Operación no admitida sobre «La atiendo yo»: %s", operator)
+            )
         correo = _escapar_like(self._alma_correo(self.env.user))
-        if (True in value) == (operator == "in"):
+        if si:
             return [("alma_asignado_a", "=ilike", correo)]
         return [
             "|",
@@ -426,10 +435,13 @@ class DiscussChannel(models.Model):
             "context": {"default_canal_id": self.id},
         }
 
-    def _to_store(self, store: Store, fields):
-        res = super()._to_store(store, fields)
+    def _to_store(self, store: Store):
+        # Rama 18: `_to_store(store)` sin `fields`, y los valores se añaden
+        # con `store.add(registro, valores)` (`mail/tools/discuss.py`); en la
+        # 19 es `store.add_model_values`.
+        res = super()._to_store(store)
         for canal in self.filtered("alma_es"):
-            store.add_model_values(self._name, canal._gts_datos_cola())
+            store.add(canal, canal._gts_datos_cola())
         return res
 
     def _gts_cerrar_para_todos(self):
@@ -444,10 +456,11 @@ class DiscussChannel(models.Model):
 
     def _gts_avisar_cola(self):
         """La conversación cambia de apartado en el lateral sin recargar."""
+        # Rama 18: `_bus_send_store` del mixin del bus
+        # (`mail/models/bus_listener_mixin.py`); en la 19 es
+        # `Store(bus_channel=…).bus_send()`.
         for canal in self.filtered("alma_es"):
-            Store(bus_channel=canal).add_model_values(
-                canal._name, canal._gts_datos_cola()
-            ).bus_send()
+            canal._bus_send_store(canal, canal._gts_datos_cola())
 
     def _get_message_create_valid_field_names(self):
         # Una plantilla se publica como un mensaje más de la conversación
@@ -705,7 +718,7 @@ class DiscussChannel(models.Model):
         tipo = self.env.ref("mail.mail_activity_data_todo", raise_if_not_found=False)
         modelo_contacto = self.env["ir.model"]._get_id("res.partner")
         for canal in canales:
-            contacto = canal._get_gateway_partner()
+            contacto = canal._gts_contacto_de_la_pasarela()
             # La actividad va en el CONTACTO y no en el canal: crearla en un
             # canal intenta suscribir al responsable como seguidor, y
             # discuss.channel lo prohibe con un UserError
@@ -734,6 +747,28 @@ class DiscussChannel(models.Model):
             if contacto:
                 vals.update({"res_model_id": modelo_contacto, "res_id": contacto.id})
             canal.alma_actividad_id = self.env["mail.activity"].sudo().create(vals)
+
+    def _gts_contacto_de_la_pasarela(self):
+        """El contacto enlazado al número de la conversación, si lo hay.
+
+        En la 19 lo da la OCA (`discuss.channel._get_gateway_partner`); el
+        `mail_gateway` de la 18 (OCA/social 18.0.1.2.1) no lo tiene, así que
+        se busca igual que allí: por el enlace de la pasarela y el token."""
+        self.ensure_one()
+        if not self.gateway_id or not self.gateway_channel_token:
+            return self.env["res.partner"]
+        return (
+            self.env["res.partner.gateway.channel"]
+            .sudo()
+            .search(
+                [
+                    ("gateway_id", "=", self.gateway_id.id),
+                    ("gateway_token", "=", self.gateway_channel_token),
+                ],
+                limit=1,
+            )
+            .partner_id
+        )
 
     @api.model
     def _alma_responsable(self):

@@ -2,6 +2,35 @@
 
 Módulo de Odoo para atender WhatsApp desde Odoo, contra el portal de Alma.
 
+## Rama 18.0 (Odoo 18 Community)
+
+Portada el 28-11-2026 desde la 19.0.0.19.1 (encargo de David, para las demos
+de despachos y asesorías en la 18). Misma numeración tras «18.0.». Lo que
+cambia respecto a la 19, todo comprobado contra `~/ref/odoo-18.0`:
+
+- **`mail_gateway` está en `OCA/social`** (rama 18.0), no en `OCA/mail`. El
+  servidor necesita `requests_toolbelt`, igual que en la 19.
+- **Depende también de `sms`**: en la 18 es `sms` quien da a los contactos
+  `phone_sanitized` (`sms/models/res_partner.py` hereda `mail.thread.phone`);
+  en la 19 lo da `phone_validation`. `sms` es auto_install de `mail`.
+- **Dos teléfonos en el contacto (`phone` y `mobile`)**. Buscar un contacto
+  por número mira los dos (`res.partner._gts_buscar_por_telefono`): el
+  `phone_sanitized` de Odoo guarda solo uno. Los contactos que crea el
+  ChatRoom llevan el número en `mobile`, y la plantilla toma el móvil por
+  defecto.
+- API: `_sql_constraints`, `groups_id`, `_to_store(store)` con `store.add`,
+  `_bus_send_store`, `Record.one/attr` en el JS, acciones de cabecera que
+  reciben el componente, el selector de campos propio (`gts_field_selector`;
+  el `field_selector` de Odoo es de la 19) y `timezone.utc` (la 18 admite
+  Python 3.10).
+- Sin `migrations/`: en la 18 se instala de cero.
+
+Antes de subir, `tools/comprobar.sh` (el hook de pre-push) pasa además
+`tools/comprobar_api_de_rama.py` (API de la 19 que en la 18 no existe) y
+`tools/comprobar_js_contra_fuente.py` (imports, parches y xpath de las
+plantillas OWL contra el fuente de la 18: si no casan, el backend se queda en
+blanco y ningún linter lo ve).
+
 **Arquitectura decidida el 19-11-2026** (ver la memoria de Óscar,
 `chatroom-19-arranque.md`, que tiene el traspaso completo):
 

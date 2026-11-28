@@ -147,8 +147,19 @@ class GtsChatroomNueva(models.TransientModel):
             crudo = ""
             if registro and nueva.plantilla_id.campo_telefono and nueva.res_model:
                 crudo = valor_de_campo(registro, nueva.plantilla_id.campo_telefono)
+            # Rama 18: hay DOS teléfonos (`mobile` y `phone`). Si el campo
+            # de la plantilla está vacío, el otro de la misma ficha antes
+            # que el del contacto; WhatsApp, mejor al móvil.
+            if not crudo and registro and nueva.res_model:
+                crudo = valor_de_campo(registro, "mobile") or valor_de_campo(
+                    registro, "phone"
+                )
             if not crudo:
-                crudo = nueva.partner_id.phone_sanitized or nueva.partner_id.phone
+                crudo = (
+                    nueva.partner_id.phone_sanitized
+                    or nueva.partner_id.mobile
+                    or nueva.partner_id.phone
+                )
             formateado = crudo and (registro or nueva)._phone_format(number=crudo)
             nueva.telefono = formateado or crudo or False
 
