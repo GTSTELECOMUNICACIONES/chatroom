@@ -1,0 +1,15 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<templates xml:space="preserve">
+    <!-- Al lado del lateral de la tarjeta (donde está «Descargar»), otro
+         igual con la carpeta. xpath con contains() y no hasclass(): lo
+         entienden el navegador y el comprobador (lxml). -->
+    <t t-inherit="mail.AttachmentList" t-inherit-mode="extension">
+        <xpath expr="//div[contains(@class, 'o-mail-AttachmentCard-aside')]" position="before">
+            <div t-if="gtsPuedeGuardar(attachment)" class="o-mail-AttachmentCard-aside position-relative overflow-hidden d-flex">
+                <button class="btn d-flex align-items-center justify-content-center w-100 h-100 rounded-0 bg-300" t-on-click.stop="() => this.gtsGuardarEnExpediente(attachment)" title="Guardar en el expediente">
+                    <i class="fa fa-folder-open" role="img" aria-label="Guardar en el expediente"/>
+                </button>
+            </div>
+        </xpath>
+    </t>
+</templates>

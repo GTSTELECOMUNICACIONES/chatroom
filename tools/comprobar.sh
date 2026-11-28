@@ -57,7 +57,7 @@ PY
   paso "records contra su modelo" $VENV/python "$RAIZ/tools/comprobar_records.py" \
        --fuente $HOME/ref/odoo-18.0/odoo/addons/base/models/*.py \
                 $HOME/ref/odoo-18.0/addons/mail/models/*.py \
-                "$MOD"/models/*.py \
+                $(ls "$MOD"/models/*.py "$MOD"/wizards/*.py 2>/dev/null) \
        -- $(find "$MOD" -name "*.xml")
   paso "api.depends" $VENV/python "$RAIZ/tools/comprobar_api_depends.py" "$MOD"
   # RAMA 18.0 (28-11-2026): el JS y las herencias OWL contra el fuente de la
