@@ -8,8 +8,9 @@ Portada el 28-11-2026 desde la 19.0.0.19.1 (encargo de David, para las demos
 de despachos y asesorías en la 18). Misma numeración tras «18.0.». Lo que
 cambia respecto a la 19, todo comprobado contra `~/ref/odoo-18.0`:
 
-- **`mail_gateway` está en `OCA/social`** (rama 18.0), no en `OCA/mail`. El
-  servidor necesita `requests_toolbelt`, igual que en la 19.
+- **`mail_gateway` está en `OCA/social`** (rama 18.0), no en `OCA/mail`. Solo
+  hace falta `mail_gateway` (sin dependencias de Python):
+  `requests_toolbelt` lo pide `mail_gateway_whatsapp`, que el ChatRoom no usa.
 - **Depende también de `sms`**: en la 18 es `sms` quien da a los contactos
   `phone_sanitized` (`sms/models/res_partner.py` hereda `mail.thread.phone`);
   en la 19 lo da `phone_validation`. `sms` es auto_install de `mail`.
